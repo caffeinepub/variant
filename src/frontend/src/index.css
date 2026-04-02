@@ -1,0 +1,380 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 1rem;
+    --background: 0.07 0.005 240;
+    --foreground: 0.95 0.01 200;
+    --card: 0.1 0.01 230;
+    --card-foreground: 0.92 0.01 200;
+    --popover: 0.12 0.015 230;
+    --popover-foreground: 0.92 0.01 200;
+    --primary: 0.82 0.18 192;
+    --primary-foreground: 0.07 0.005 240;
+    --secondary: 0.15 0.02 230;
+    --secondary-foreground: 0.92 0.01 200;
+    --muted: 0.13 0.01 230;
+    --muted-foreground: 0.55 0.03 210;
+    --accent: 0.82 0.18 192;
+    --accent-foreground: 0.07 0.005 240;
+    --destructive: 0.65 0.22 27;
+    --destructive-foreground: 0.95 0.01 200;
+    --border: 0.2 0.04 210;
+    --input: 0.14 0.02 230;
+    --ring: 0.82 0.18 192;
+    --chart-1: 0.82 0.18 192;
+    --chart-2: 0.7 0.15 165;
+    --chart-3: 0.6 0.2 220;
+    --chart-4: 0.75 0.2 150;
+    --chart-5: 0.65 0.22 27;
+    --sidebar: 0.08 0.008 235;
+    --sidebar-foreground: 0.92 0.01 200;
+    --sidebar-primary: 0.82 0.18 192;
+    --sidebar-primary-foreground: 0.07 0.005 240;
+    --sidebar-accent: 0.14 0.015 230;
+    --sidebar-accent-foreground: 0.92 0.01 200;
+    --sidebar-border: 0.18 0.03 215;
+    --sidebar-ring: 0.82 0.18 192;
+
+    /* Direct hex tokens for glow/neon effects */
+    --cyan: #20e6e6;
+    --cyan-bright: #2cf6ff;
+    --cyan-dim: rgba(32, 230, 230, 0.15);
+    --cyan-glow: rgba(32, 230, 230, 0.4);
+    --glass-bg: rgba(16, 24, 32, 0.55);
+    --obsidian: #070b10;
+    --card-border: rgba(32, 230, 230, 0.18);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  /* Desktop: overflow hidden. Mobile: allow scroll */
+  body {
+    background: var(--obsidian);
+    font-family: "Inter", sans-serif;
+    color: #eaf2f7;
+    overflow: hidden;
+  }
+
+  @media (max-width: 767px) {
+    body {
+      overflow: auto;
+    }
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0b1118;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--cyan);
+    border-radius: 3px;
+    opacity: 0.7;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--cyan-bright);
+  }
+}
+
+@layer components {
+  /* === Touch targets === */
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  /* === Math text — word wrap for equations === */
+  .math-text {
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: pre-wrap;
+    hyphens: auto;
+  }
+
+  /* === Mixed fraction display === */
+  .fraction-display {
+    font-size: 1.2em;
+    font-weight: 700;
+    color: var(--cyan);
+    text-shadow: 0 0 10px rgba(32, 230, 230, 0.6);
+    display: inline;
+  }
+
+  /* === Mobile bottom nav === */
+  .mobile-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: rgba(7, 11, 16, 0.97);
+    border-top: 1px solid rgba(32, 230, 230, 0.1);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    z-index: 100;
+  }
+
+  /* === Glass card === */
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+  }
+
+  .glass-card-hover {
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  .glass-card-hover:hover {
+    border-color: rgba(32, 230, 230, 0.4);
+    box-shadow: 0 0 20px rgba(32, 230, 230, 0.12);
+  }
+
+  .neon-glow {
+    box-shadow: 0 0 12px rgba(32, 230, 230, 0.4), 0 0 32px
+      rgba(32, 230, 230, 0.15);
+  }
+
+  .neon-text {
+    color: var(--cyan);
+    text-shadow: 0 0 10px rgba(32, 230, 230, 0.6);
+  }
+
+  .neon-text-bright {
+    color: var(--cyan-bright);
+    text-shadow: 0 0 15px rgba(44, 246, 255, 0.8);
+  }
+
+  .cyan-input {
+    background: rgba(10, 15, 21, 0.8);
+    border: 1.5px solid rgba(32, 230, 230, 0.3);
+    color: #eaf2f7;
+    border-radius: 10px;
+    padding: 10px 14px;
+    width: 100%;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: "Inter", sans-serif;
+    font-size: 14px;
+  }
+  .cyan-input::placeholder {
+    color: rgba(154, 167, 178, 0.5);
+  }
+  .cyan-input:focus {
+    outline: none;
+    border-color: var(--cyan);
+    box-shadow: 0 0 16px rgba(32, 230, 230, 0.35);
+  }
+
+  .cyan-btn {
+    background: linear-gradient(135deg, #20e6e6, #14cfcb);
+    color: #070b10;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 10px 22px;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 20px rgba(32, 230, 230, 0.5);
+    transition: box-shadow 0.2s, transform 0.1s;
+    font-family: "Inter", sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .cyan-btn:hover {
+    box-shadow: 0 0 30px rgba(32, 230, 230, 0.7);
+    transform: translateY(-1px);
+  }
+  .cyan-btn:active {
+    transform: translateY(0);
+  }
+  .cyan-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .outline-btn {
+    background: transparent;
+    color: var(--cyan);
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 8px 18px;
+    cursor: pointer;
+    border: 1.5px solid rgba(32, 230, 230, 0.5);
+    box-shadow: 0 0 8px rgba(32, 230, 230, 0.15);
+    transition: box-shadow 0.2s, border-color 0.2s, transform 0.1s;
+    font-family: "Inter", sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .outline-btn:hover {
+    border-color: var(--cyan);
+    box-shadow: 0 0 16px rgba(32, 230, 230, 0.35);
+    transform: translateY(-1px);
+  }
+  .outline-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border: 1px solid rgba(32, 230, 230, 0.5);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--cyan);
+    background: rgba(32, 230, 230, 0.08);
+    text-shadow: 0 0 8px rgba(32, 230, 230, 0.4);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .chip-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(154, 167, 178, 0.7);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-right: 4px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--cyan);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(32, 230, 230, 0.4);
+  }
+}
+
+/* === Keyframe animations === */
+
+@keyframes slotRoll {
+  0% {
+    transform: translateY(0%);
+  }
+  100% {
+    transform: translateY(-90%);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 12px rgba(32, 230, 230, 0.4), 0 0 24px
+      rgba(32, 230, 230, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(32, 230, 230, 0.8), 0 0 48px
+      rgba(32, 230, 230, 0.25);
+  }
+}
+
+@keyframes green-glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(34, 197, 94, 0.9);
+  }
+}
+
+@keyframes red-glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(239, 68, 68, 0.9);
+  }
+}
+
+@keyframes sync-green-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(34, 197, 94, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(34, 197, 94, 1);
+  }
+}
+
+@keyframes sync-yellow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(245, 158, 11, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(245, 158, 11, 1);
+  }
+}
+
+@keyframes sync-red-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(239, 68, 68, 1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease forwards;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
