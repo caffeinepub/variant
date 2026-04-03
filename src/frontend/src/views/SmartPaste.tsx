@@ -11,10 +11,15 @@ import type React from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useActor } from "../hooks/useActor";
-import { type ClassificationResult, classifyText } from "../utils/classify";
+import {
+  type ClassificationResult,
+  classifyText,
+  formatUnitMethodSolution,
+} from "../utils/classify";
 
 interface SmartPasteProps {
   onSaved?: () => void;
+  onSavedAndSprint?: () => void;
 }
 
 // --- Gemini solution filler patterns to strip ---
@@ -48,7 +53,6 @@ function isCoreLine(line: string): boolean {
 
 // Detect and render mixed fraction patterns like "16 2/3%" or "33 1/3"
 function renderWithFractions(text: string): React.ReactNode[] {
-  // Match patterns like: 16 2/3% or 33 1/3 or 1/4
   const fractionRegex = /(\d+\s+\d+\/\d+%?|\d+\/\d+%?)/g;
   const parts: React.ReactNode[] = [];
   let lastIdx = 0;
@@ -74,43 +78,62 @@ function renderWithFractions(text: string): React.ReactNode[] {
 function parseGeminiSolution(raw: string): string[] {
   let text = raw;
 
-  // Strip filler openers/closers
   for (const pattern of FILLER_PATTERNS) {
     text = text.replace(pattern, "");
   }
 
-  // Trim and split lines
   const lines = text
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l.length > 3);
 
-  // Keep only lines with formula/calculation content
   const coreLines = lines.filter(isCoreLine);
-
-  // If nothing left, fall back to all non-empty lines
   const finalLines = coreLines.length >= 2 ? coreLines : lines;
 
-  // Number them as steps
   return finalLines
     .slice(0, 15)
     .map((l, i) => {
-      const clean = l.replace(/^(?:step\s*\d+[:.\-]?|\d+[.)\s]+)/i, "").trim();
+      const clean = l
+        .replace(/^(?:step\s*\d+[:.\.\-]?|\d+[.)\s]+)/i, "")
+        .trim();
       return `Step ${i + 1}: ${clean}`;
     })
     .filter((s) => s.replace(/^Step \d+: /, "").length > 0);
 }
 
-export const SmartPaste: React.FC<SmartPasteProps> = ({ onSaved }) => {
+function getDifficultyStyle(difficulty: string): React.CSSProperties {
+  if (difficulty === "Easy")
+    return {
+      background: "rgba(34,197,94,0.1)",
+      border: "1px solid rgba(34,197,94,0.3)",
+      color: "#22c55e",
+    };
+  if (difficulty === "Hard")
+    return {
+      background: "rgba(239,68,68,0.1)",
+      border: "1px solid rgba(239,68,68,0.3)",
+      color: "#ef4444",
+    };
+  // Medium
+  return {
+    background: "rgba(245,158,11,0.1)",
+    border: "1px solid rgba(245,158,11,0.3)",
+    color: "#f59e0b",
+  };
+}
+
+export const SmartPaste: React.FC<SmartPasteProps> = ({
+  onSaved,
+  onSavedAndSprint,
+}) => {
   const { actor } = useActor();
   const [pasteText, setPasteText] = useState("");
   const [classification, setClassification] =
     useState<ClassificationResult | null>(null);
-  const [showSteps, setShowSteps] = useState(true);
+  const [showSteps, setShowSteps] = useState(false);
   const [saving, setSaving] = useState(false);
   const [parsed, setParsed] = useState(false);
 
-  // Gemini solution parser state
   const [showSolutionPaste, setShowSolutionPaste] = useState(false);
   const [solutionRaw, setSolutionRaw] = useState("");
   const [cleanedSteps, setCleanedSteps] = useState<string[]>([]);
@@ -138,9 +161,13 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({ onSaved }) => {
     }
     setCleanedSteps(steps);
     setShowCleanedSteps(true);
-    // Merge into classification if it exists
     if (classification) {
-      setClassification({ ...classification, solutionSteps: steps });
+      const unitMethod = formatUnitMethodSolution(steps);
+      setClassification({
+        ...classification,
+        solutionSteps: steps,
+        unitMethodSolution: unitMethod,
+      });
     }
     toast.success(`Extracted ${steps.length} solution steps`);
   };
@@ -153,7 +180,6 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({ onSaved }) => {
       const questionText =
         lines.slice(0, 3).join(" ").trim() || pasteText.slice(0, 300);
 
-      // Merge cleaned steps if available
       const stepsToSave =
         cleanedSteps.length > 0 ? cleanedSteps : classification.solutionSteps;
 
@@ -165,7 +191,7 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({ onSaved }) => {
         stepsToSave,
         classification.numbers,
       );
-      toast.success("Question saved successfully!");
+      toast.success("Question saved! Opening Sprint...");
       setPasteText("");
       setSolutionRaw("");
       setClassification(null);
@@ -173,6 +199,7 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({ onSaved }) => {
       setParsed(false);
       setShowSolutionPaste(false);
       setShowCleanedSteps(false);
+      onSavedAndSprint?.();
       onSaved?.();
     } catch (e) {
       toast.error("Failed to save question");
@@ -272,7 +299,7 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({ onSaved }) => {
               data-ocid="smartpaste.solution.textarea"
               className="cyan-input resize-none math-text"
               rows={7}
-              placeholder="Paste Gemini solution here... e.g. 'Sure! Here is the explanation... Step 1: CP = 100...' The app strips filler and extracts only formula lines."
+              placeholder="Paste Gemini solution here..."
               value={solutionRaw}
               onChange={(e) => setSolutionRaw(e.target.value)}
             />
@@ -287,7 +314,6 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({ onSaved }) => {
               Clean &amp; Apply
             </button>
 
-            {/* Cleaned steps preview */}
             {showCleanedSteps && cleanedSteps.length > 0 && (
               <div className="space-y-2 animate-fade-in">
                 <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
@@ -328,6 +354,7 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({ onSaved }) => {
 
       {classification && (
         <div className="animate-fade-in space-y-4">
+          {/* Classification result */}
           <div className="glass-card p-5 space-y-4">
             <p className="section-title">Classification Result</p>
             <div className="flex flex-wrap gap-3">
@@ -342,6 +369,34 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({ onSaved }) => {
               <div className="flex items-center gap-2">
                 <span className="chip-label">Topic</span>
                 <span className="chip">{classification.topic}</span>
+              </div>
+              {/* Type chip — purple */}
+              <div className="flex items-center gap-2">
+                <span className="chip-label">Type</span>
+                <span
+                  className="chip"
+                  style={{
+                    background: "rgba(132,100,255,0.1)",
+                    border: "1px solid rgba(132,100,255,0.3)",
+                    color: "#a78bfa",
+                    textShadow: "none",
+                  }}
+                >
+                  {classification.type}
+                </span>
+              </div>
+              {/* Difficulty chip — color-coded */}
+              <div className="flex items-center gap-2">
+                <span className="chip-label">Difficulty</span>
+                <span
+                  className="chip"
+                  style={{
+                    ...getDifficultyStyle(classification.difficulty),
+                    textShadow: "none",
+                  }}
+                >
+                  {classification.difficulty}
+                </span>
               </div>
             </div>
 
@@ -371,50 +426,75 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({ onSaved }) => {
             )}
           </div>
 
-          {classification.solutionSteps.length > 0 && (
+          {/* Unit Method Solution — primary display */}
+          {classification.unitMethodSolution && (
             <div className="glass-card p-5 space-y-3">
-              <button
-                type="button"
-                data-ocid="smartpaste.solution_steps.toggle"
-                className="w-full flex items-center justify-between"
-                onClick={() => setShowSteps((v) => !v)}
+              <p className="section-title">Unit Method Solution</p>
+              <div
+                style={{
+                  background: "rgba(32,230,230,0.06)",
+                  border: "1px solid rgba(32,230,230,0.18)",
+                  borderRadius: "12px",
+                  padding: "12px 16px",
+                  fontFamily: "monospace",
+                  color: "#20E6E6",
+                  fontSize: "13px",
+                  lineHeight: "1.6",
+                  overflowWrap: "break-word",
+                  wordBreak: "break-word",
+                }}
               >
-                <p className="section-title">Sovereign Solution View</p>
-                {showSteps ? (
-                  <ChevronUp size={16} className="text-slate-400" />
-                ) : (
-                  <ChevronDown size={16} className="text-slate-400" />
-                )}
-              </button>
-              {showSteps && (
-                <div className="space-y-2 animate-fade-in">
-                  {classification.solutionSteps.map((step, i) => {
-                    const text = step.replace(/^Step \d+:\s*/i, "");
-                    return (
-                      <div
-                        // biome-ignore lint/suspicious/noArrayIndexKey: ordered steps
-                        key={i}
-                        className="flex gap-3 p-3 rounded-xl"
-                        style={{
-                          background: "rgba(32,230,230,0.04)",
-                          border: "1px solid rgba(32,230,230,0.1)",
-                        }}
-                      >
-                        <span
-                          className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-                          style={{
-                            background: "rgba(32,230,230,0.15)",
-                            color: "var(--cyan)",
-                          }}
-                        >
-                          {i + 1}
-                        </span>
-                        <p className="text-sm text-slate-300 leading-relaxed">
-                          {renderWithFractions(text)}
-                        </p>
-                      </div>
-                    );
-                  })}
+                {classification.unitMethodSolution}
+              </div>
+
+              {/* Full Steps — collapsible, secondary */}
+              {classification.solutionSteps.length > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    data-ocid="smartpaste.solution_steps.toggle"
+                    className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                    onClick={() => setShowSteps((v) => !v)}
+                  >
+                    {showSteps ? (
+                      <ChevronUp size={13} />
+                    ) : (
+                      <ChevronDown size={13} />
+                    )}
+                    {showSteps ? "Hide" : "View"} Full Steps (
+                    {classification.solutionSteps.length})
+                  </button>
+                  {showSteps && (
+                    <div className="space-y-2 mt-3 animate-fade-in">
+                      {classification.solutionSteps.map((step, i) => {
+                        const text = step.replace(/^Step \d+:\s*/i, "");
+                        return (
+                          <div
+                            // biome-ignore lint/suspicious/noArrayIndexKey: ordered steps
+                            key={i}
+                            className="flex gap-3 p-3 rounded-xl"
+                            style={{
+                              background: "rgba(32,230,230,0.04)",
+                              border: "1px solid rgba(32,230,230,0.1)",
+                            }}
+                          >
+                            <span
+                              className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+                              style={{
+                                background: "rgba(32,230,230,0.15)",
+                                color: "var(--cyan)",
+                              }}
+                            >
+                              {i + 1}
+                            </span>
+                            <p className="text-sm text-slate-300 leading-relaxed">
+                              {renderWithFractions(text)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -433,7 +513,7 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({ onSaved }) => {
             ) : (
               <Save size={16} />
             )}
-            {saving ? "Saving..." : "Save Master Question"}
+            {saving ? "Saving..." : "Save & Open Sprint"}
           </button>
         </div>
       )}

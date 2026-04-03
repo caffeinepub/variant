@@ -4,6 +4,9 @@ export interface ClassificationResult {
   subject: string;
   chapter: string;
   topic: string;
+  type: string;
+  difficulty: string;
+  unitMethodSolution: string;
   solutionSteps: string[];
   numbers: string[];
 }
@@ -100,6 +103,38 @@ export function detectTopic(text: string): string {
   return "General";
 }
 
+export function detectType(text: string): string {
+  const lower = text.toLowerCase();
+  if (lower.match(/animal|leg|pigeon|rabbit|cow|bird|spider|hen/))
+    return "Zoo/Legs";
+  if (lower.match(/train|platform|bridge|tunnel|crossing/)) return "Trains";
+  if (lower.match(/mixture|alligation|alloy|blend|solution|concentration/))
+    return "Mixture/Alligation";
+  if (lower.match(/profit|loss|cost price|selling price|\bcp\b|\bsp\b/))
+    return "Profit/Loss";
+  if (lower.match(/age|years old|older|younger|born/)) return "Age Problems";
+  if (lower.match(/work|pipe|cistern|fill|empty|worker|days/))
+    return "Work/Pipe";
+  if (lower.match(/speed|distance|time|km\/h|m\/s/)) return "Speed/Distance";
+  return "General";
+}
+
+export function detectDifficulty(text: string, numbers: string[]): string {
+  const hasFractions = /\d+\/\d+/.test(text);
+  if (numbers.length <= 3 && !hasFractions) return "Easy";
+  if (numbers.length >= 7 || (hasFractions && numbers.length >= 5))
+    return "Hard";
+  return "Medium";
+}
+
+export function formatUnitMethodSolution(steps: string[]): string {
+  if (steps.length === 0) return "";
+  return steps
+    .map((s) => s.replace(/^Step\s*\d+[:.\-]?\s*/i, "").trim())
+    .filter(Boolean)
+    .join(" → ");
+}
+
 export function parseSolution(text: string): string[] {
   // Strip messy math formatting characters
   const cleaned = text
@@ -136,11 +171,16 @@ export function extractNumbers(text: string): string[] {
 }
 
 export function classifyText(text: string): ClassificationResult {
+  const solutionSteps = parseSolution(text);
+  const numbers = extractNumbers(text);
   return {
     subject: detectSubject(text),
     chapter: detectChapter(text),
     topic: detectTopic(text),
-    solutionSteps: parseSolution(text),
-    numbers: extractNumbers(text),
+    type: detectType(text),
+    difficulty: detectDifficulty(text, numbers),
+    unitMethodSolution: formatUnitMethodSolution(solutionSteps),
+    solutionSteps,
+    numbers,
   };
 }

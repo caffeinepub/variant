@@ -1,9 +1,16 @@
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   BookOpen,
   ChevronDown,
   ChevronUp,
   Copy,
   Loader2,
+  MoreVertical,
   Save,
   Search,
   ToggleLeft,
@@ -13,7 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { MasterQuestion } from "../backend";
 import { SlotMachineNumber } from "../components/SlotMachineNumber";
@@ -51,7 +58,6 @@ const VariantModal: React.FC<VariantModalProps> = ({
 
   const handleGenerate = () => {
     setIsAnimating(true);
-    // Show a single preview of the first variant
     const result = generateVariantQuestion(
       question.text,
       decimalMode,
@@ -67,12 +73,10 @@ const VariantModal: React.FC<VariantModalProps> = ({
     setSaveProgress({ done: 0, total: quantity });
 
     try {
-      // Generate N variants
       const variants = Array.from({ length: quantity }, () =>
         generateVariantQuestion(question.text, decimalMode, fractionMode),
       );
 
-      // Save them in parallel with progress tracking
       let done = 0;
       await Promise.all(
         variants.map(async (v) => {
@@ -258,7 +262,6 @@ const VariantModal: React.FC<VariantModalProps> = ({
             Quantity
           </p>
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Manual input */}
             <input
               type="number"
               min={1}
@@ -285,7 +288,6 @@ const VariantModal: React.FC<VariantModalProps> = ({
                 outline: "none",
               }}
             />
-            {/* Quick-select chips */}
             <div className="flex gap-2 flex-wrap">
               {QUICK_QUANTITIES.map((q) => (
                 <button
@@ -417,128 +419,6 @@ const VariantModal: React.FC<VariantModalProps> = ({
             </button>
           </div>
         )}
-      </div>
-    </div>
-  );
-};
-
-// --- Swipeable card wrapper ---
-interface SwipeableCardProps {
-  onDelete: () => void;
-  deleting: boolean;
-  children: React.ReactNode;
-  index: number;
-}
-
-const SwipeableCard: React.FC<SwipeableCardProps> = ({
-  onDelete,
-  deleting,
-  children,
-  index,
-}) => {
-  const [offset, setOffset] = useState(0);
-  const [revealed, setRevealed] = useState(false);
-  const startXRef = useRef(0);
-  const DELETE_THRESHOLD = 80;
-  const DELETE_ZONE_WIDTH = 80;
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    startXRef.current = e.touches[0].clientX;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    const delta = startXRef.current - e.touches[0].clientX;
-    if (delta > 0) {
-      setOffset(Math.min(delta, DELETE_ZONE_WIDTH + 16));
-    } else if (delta < -10) {
-      setOffset(0);
-      setRevealed(false);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (offset >= DELETE_THRESHOLD) {
-      setOffset(DELETE_ZONE_WIDTH);
-      setRevealed(true);
-    } else {
-      setOffset(0);
-      setRevealed(false);
-    }
-  };
-
-  const resetSwipe = () => {
-    setOffset(0);
-    setRevealed(false);
-  };
-
-  return (
-    <div
-      data-ocid={`questions.item.${index + 1}`}
-      style={{ position: "relative", overflow: "hidden", borderRadius: "16px" }}
-    >
-      {/* Red delete zone behind */}
-      <div
-        style={{
-          position: "absolute",
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: `${DELETE_ZONE_WIDTH}px`,
-          background: "rgba(239,68,68,0.15)",
-          border: "1px solid rgba(239,68,68,0.4)",
-          borderRadius: "16px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <button
-          type="button"
-          data-ocid={`questions.delete_button.${index + 1}`}
-          onClick={onDelete}
-          disabled={deleting}
-          style={{
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            color: "#ef4444",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "4px",
-          }}
-        >
-          {deleting ? (
-            <Loader2 size={20} className="animate-spin" />
-          ) : (
-            <Trash2 size={20} />
-          )}
-          <span style={{ fontSize: "10px", fontWeight: 700 }}>Delete</span>
-        </button>
-      </div>
-
-      {/* Card content — slides left on swipe */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: touch-only swipe container */}
-      <div
-        style={{
-          transform: `translateX(-${offset}px)`,
-          transition:
-            offset === 0 || offset === DELETE_ZONE_WIDTH
-              ? "transform 0.25s ease"
-              : "none",
-          willChange: "transform",
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onClick={() => {
-          if (revealed) resetSwipe();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") resetSwipe();
-        }}
-      >
-        {children}
       </div>
     </div>
   );
@@ -689,133 +569,144 @@ export const MyQuestions: React.FC = () => {
       ) : (
         <div className="space-y-4">
           {questions.map((q, idx) => (
-            <SwipeableCard
+            <div
               key={q.id.toString()}
-              index={idx}
-              onDelete={() => handleDelete(q.id)}
-              deleting={deleting === q.id}
+              data-ocid={`questions.item.${idx + 1}`}
+              className="glass-card glass-card-hover p-5 space-y-3"
             >
-              <div className="glass-card glass-card-hover p-5 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="math-text text-white text-sm font-medium leading-relaxed line-clamp-3">
-                      {q.text}
-                    </p>
-                  </div>
-                  {/* Desktop delete button — hidden on mobile (use swipe) */}
-                  <div className="hidden md:flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p
+                    className="math-text text-white text-sm font-medium leading-relaxed"
+                    style={{ maxHeight: "100px", overflowY: "auto" }}
+                  >
+                    {q.text}
+                  </p>
+                </div>
+                {/* Three-dot menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      data-ocid={`questions.delete_button.${idx + 1}`}
-                      className="p-2 rounded-lg hover:bg-red-500/10 transition-colors"
+                      data-ocid={`questions.item.${idx + 1}.open_modal_button`}
+                      className="p-2 rounded-lg hover:bg-white/5 transition-colors flex-shrink-0"
+                      aria-label="More options"
+                    >
+                      <MoreVertical size={16} className="text-slate-400" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="glass-dropdown"
+                    style={{
+                      background: "rgba(12,18,26,0.95)",
+                      border: "1px solid rgba(32,230,230,0.15)",
+                      backdropFilter: "blur(12px)",
+                    }}
+                  >
+                    <DropdownMenuItem
+                      className="text-red-400 focus:text-red-300 cursor-pointer"
                       onClick={() => handleDelete(q.id)}
                       disabled={deleting === q.id}
-                      title="Delete question"
-                      aria-label="Delete question"
                     >
                       {deleting === q.id ? (
-                        <Loader2
-                          size={14}
-                          className="animate-spin text-red-400"
-                        />
+                        <Loader2 size={14} className="animate-spin mr-2" />
                       ) : (
-                        <Trash2
-                          size={14}
-                          className="text-red-400/60 hover:text-red-400"
-                        />
+                        <Trash2 size={14} className="mr-2" />
                       )}
-                    </button>
-                  </div>
-                </div>
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <span className="chip">{q.subject}</span>
-                  <span className="chip">{q.chapter}</span>
-                  <span className="chip">{q.topic}</span>
-                  {variantCounts[q.id.toString()] > 0 && (
-                    <span
-                      className="chip"
-                      style={{
-                        background: "rgba(132,100,255,0.1)",
-                        border: "1px solid rgba(132,100,255,0.3)",
-                        color: "#a78bfa",
-                      }}
-                    >
-                      {variantCounts[q.id.toString()]} variant
-                      {variantCounts[q.id.toString()] !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                </div>
-
-                <div
-                  className="flex items-center justify-between pt-2 flex-wrap gap-2"
-                  style={{ borderTop: "1px solid rgba(32,230,230,0.08)" }}
-                >
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-xs text-slate-600">
-                      {formatDate(q.createdAt)}
-                    </span>
-                    {q.solutionSteps.length > 0 && (
-                      <button
-                        type="button"
-                        data-ocid={`questions.solution.toggle.${idx + 1}`}
-                        className="text-xs flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors"
-                        onClick={() =>
-                          setExpandedId(expandedId === q.id ? null : q.id)
-                        }
-                      >
-                        {expandedId === q.id ? (
-                          <ChevronUp size={12} />
-                        ) : (
-                          <ChevronDown size={12} />
-                        )}
-                        {expandedId === q.id ? "Hide" : "View"} Solution (
-                        {q.solutionSteps.length} steps)
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    data-ocid={`questions.generate_variant.button.${idx + 1}`}
-                    className="cyan-btn flex items-center gap-2 py-2 px-4 text-xs"
-                    style={{ minHeight: "48px" }}
-                    onClick={() => setVariantTarget(q)}
+              <div className="flex flex-wrap gap-2">
+                <span className="chip">{q.subject}</span>
+                <span className="chip">{q.chapter}</span>
+                <span className="chip">{q.topic}</span>
+                {variantCounts[q.id.toString()] > 0 && (
+                  <span
+                    className="chip"
+                    style={{
+                      background: "rgba(132,100,255,0.1)",
+                      border: "1px solid rgba(132,100,255,0.3)",
+                      color: "#a78bfa",
+                    }}
                   >
-                    <Zap size={12} />
-                    Generate Variant
-                  </button>
-                </div>
-
-                {expandedId === q.id && q.solutionSteps.length > 0 && (
-                  <div className="space-y-2 pt-2 animate-fade-in">
-                    {q.solutionSteps.map((step, i) => (
-                      <div
-                        // biome-ignore lint/suspicious/noArrayIndexKey: ordered steps
-                        key={i}
-                        className="flex gap-3 p-3 rounded-xl"
-                        style={{
-                          background: "rgba(32,230,230,0.03)",
-                          border: "1px solid rgba(32,230,230,0.08)",
-                        }}
-                      >
-                        <span
-                          className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
-                          style={{
-                            background: "rgba(32,230,230,0.12)",
-                            color: "var(--cyan)",
-                          }}
-                        >
-                          {i + 1}
-                        </span>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                          {step.replace(/^Step \d+:\s*/i, "")}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                    {variantCounts[q.id.toString()]} variant
+                    {variantCounts[q.id.toString()] !== 1 ? "s" : ""}
+                  </span>
                 )}
               </div>
-            </SwipeableCard>
+
+              <div
+                className="flex items-center justify-between pt-2 flex-wrap gap-2"
+                style={{ borderTop: "1px solid rgba(32,230,230,0.08)" }}
+              >
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-xs text-slate-600">
+                    {formatDate(q.createdAt)}
+                  </span>
+                  {q.solutionSteps.length > 0 && (
+                    <button
+                      type="button"
+                      data-ocid={`questions.solution.toggle.${idx + 1}`}
+                      className="text-xs flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors"
+                      onClick={() =>
+                        setExpandedId(expandedId === q.id ? null : q.id)
+                      }
+                    >
+                      {expandedId === q.id ? (
+                        <ChevronUp size={12} />
+                      ) : (
+                        <ChevronDown size={12} />
+                      )}
+                      {expandedId === q.id ? "Hide" : "View"} Solution (
+                      {q.solutionSteps.length} steps)
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  data-ocid={`questions.generate_variant.button.${idx + 1}`}
+                  className="cyan-btn flex items-center gap-2 py-2 px-4 text-xs"
+                  style={{ minHeight: "48px" }}
+                  onClick={() => setVariantTarget(q)}
+                >
+                  <Zap size={12} />
+                  Generate Variant
+                </button>
+              </div>
+
+              {expandedId === q.id && q.solutionSteps.length > 0 && (
+                <div className="space-y-2 pt-2 animate-fade-in">
+                  {q.solutionSteps.map((step, i) => (
+                    <div
+                      // biome-ignore lint/suspicious/noArrayIndexKey: ordered steps
+                      key={i}
+                      className="flex gap-3 p-3 rounded-xl"
+                      style={{
+                        background: "rgba(32,230,230,0.03)",
+                        border: "1px solid rgba(32,230,230,0.08)",
+                      }}
+                    >
+                      <span
+                        className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                        style={{
+                          background: "rgba(32,230,230,0.12)",
+                          color: "var(--cyan)",
+                        }}
+                      >
+                        {i + 1}
+                      </span>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        {step.replace(/^Step \d+:\s*/i, "")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}

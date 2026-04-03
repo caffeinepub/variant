@@ -378,3 +378,11 @@
 .animate-glow-pulse {
   animation: glow-pulse 2s ease-in-out infinite;
 }
+
+/* === Glass dropdown (three-dot menu) === */
+.glass-dropdown {
+  background: rgba(12, 18, 26, 0.95) !important;
+  border: 1px solid rgba(32, 230, 230, 0.15) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}

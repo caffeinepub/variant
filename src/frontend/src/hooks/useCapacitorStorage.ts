@@ -2,9 +2,8 @@
  * useCapacitorStorage.ts
  * Replaces showDirectoryPicker with Capacitor Filesystem on native,
  * and Blob anchor-download on web/Android.
+ * Uses dynamic runtime imports to avoid bundler resolution errors.
  */
-
-import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 
 function isNative(): boolean {
   return (
@@ -13,6 +12,10 @@ function isNative(): boolean {
   );
 }
 
+const dynamicImport = new Function("m", "return import(m)") as (
+  m: string,
+) => Promise<any>;
+
 export function useCapacitorStorage() {
   const saveFileNative = async (
     filename: string,
@@ -20,6 +23,9 @@ export function useCapacitorStorage() {
   ): Promise<boolean> => {
     if (isNative()) {
       try {
+        const { Filesystem, Directory, Encoding } = await dynamicImport(
+          "@capacitor/filesystem",
+        );
         await Filesystem.writeFile({
           path: filename,
           data,
@@ -29,11 +35,9 @@ export function useCapacitorStorage() {
         return true;
       } catch (e) {
         console.warn("[useCapacitorStorage] Filesystem.writeFile failed:", e);
-        return false;
       }
     }
 
-    // Web/Android PWA fallback: Blob anchor download
     try {
       const blob = new Blob([data], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -53,6 +57,9 @@ export function useCapacitorStorage() {
   const loadFileNative = async (filename: string): Promise<string | null> => {
     if (isNative()) {
       try {
+        const { Filesystem, Directory, Encoding } = await dynamicImport(
+          "@capacitor/filesystem",
+        );
         const result = await Filesystem.readFile({
           path: filename,
           directory: Directory.Documents,
@@ -64,8 +71,6 @@ export function useCapacitorStorage() {
         return null;
       }
     }
-
-    // Web: cannot read from Downloads folder, user must import manually
     return null;
   };
 
