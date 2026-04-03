@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useCapacitorNotifications } from "./useCapacitorNotifications";
 
 export type NotificationPermission = "default" | "granted" | "denied";
 
@@ -15,6 +16,8 @@ export interface UseNotificationsReturn {
 }
 
 export function useNotifications(): UseNotificationsReturn {
+  const capNotif = useCapacitorNotifications();
+
   const [permission, setPermission] = useState<NotificationPermission>(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
       return Notification.permission as NotificationPermission;
@@ -50,41 +53,23 @@ export function useNotifications(): UseNotificationsReturn {
   }, []);
 
   const requestPermission = useCallback(async () => {
-    if (!("Notification" in window)) {
-      setShowDeniedModal(true);
-      return;
-    }
+    const result = await capNotif.requestPermission();
+    setPermission(result as NotificationPermission);
 
-    const result = await Notification.requestPermission();
-    const perm = result as NotificationPermission;
-    setPermission(perm);
-
-    if (perm === "granted") {
+    if (result === "granted") {
       setShowDeniedModal(false);
     } else {
-      // denied or default (dismissed)
       setShowDeniedModal(true);
     }
-  }, []);
+  }, [capNotif]);
 
   const fireNotification = useCallback(
     (title: string, body: string) => {
-      if (swRegistration?.active) {
-        swRegistration.active.postMessage({
-          type: "SHOW_NOTIFICATION",
-          title,
-          body,
-        });
-      } else if ("Notification" in window && permission === "granted") {
-        // Fallback: direct Notification API
-        new Notification(title, {
-          body,
-          tag: "timer-done",
-          icon: "/assets/generated/variant-logo-transparent.dim_200x200.png",
-        });
-      }
+      capNotif.scheduleNotification(title, body).catch((e) => {
+        console.warn("[useNotifications] fireNotification failed:", e);
+      });
     },
-    [swRegistration, permission],
+    [capNotif],
   );
 
   const testNotification = useCallback(async () => {
@@ -107,27 +92,21 @@ export function useNotifications(): UseNotificationsReturn {
         }
         setTestCountdown(null);
 
-        // Send the test notification
-        if (swRegistration?.active) {
-          swRegistration.active.postMessage({
-            type: "SHOW_NOTIFICATION",
-            title: "✅ Timer Test",
-            body: "Notifications are working! Your timer alerts will appear here.",
+        // Fire via Capacitor bridge (or SW fallback on web)
+        capNotif
+          .scheduleNotification(
+            "✅ Timer Test",
+            "Notifications are working! Your timer alerts will appear here.",
+          )
+          .then(() => setVerified(true))
+          .catch((e) => {
+            console.warn("[useNotifications] testNotification fire failed:", e);
           });
-          setVerified(true);
-        } else if ("Notification" in window && permission === "granted") {
-          new Notification("✅ Timer Test", {
-            body: "Notifications are working! Your timer alerts will appear here.",
-            tag: "timer-done",
-            icon: "/assets/generated/variant-logo-transparent.dim_200x200.png",
-          });
-          setVerified(true);
-        }
       } else {
         setTestCountdown(count);
       }
     }, 1000);
-  }, [testCountdown, permission, swRegistration, requestPermission]);
+  }, [testCountdown, permission, requestPermission, capNotif]);
 
   return {
     permission,

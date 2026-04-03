@@ -1,0 +1,22 @@
+{
+  "name": "Variant \u2014 Math Drill Engine",
+  "short_name": "Variant",
+  "description": "High-performance math drill and variant generation app",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070B10",
+  "theme_color": "#20E6E6",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/assets/generated/variant-logo-transparent.dim_200x200.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/generated/variant-logo-transparent.dim_200x200.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

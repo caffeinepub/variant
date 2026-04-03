@@ -90,6 +90,10 @@
     "react-quill-new": "3.4.6",
     "three": "^0.176.0",
     "zustand": "~5.0.5",
-    "motion": "^12.34.3"
+    "motion": "^12.34.3",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/local-notifications": "^6.1.0",
+    "@capacitor/filesystem": "^6.0.2",
+    "@capacitor/preferences": "^6.0.3"
   }
 }

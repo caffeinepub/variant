@@ -1,26 +1,49 @@
-# Variant — Timer Notification System
+# Variant — Capacitor/PWA Native Integration
 
 ## Current State
-The app has Settings, SmartPaste, MyQuestions, and SprintMode views. There is no notification permission logic, no service worker registration, and no bell icon indicator. The SyncStatusIcon sits in the header but there is no notification status.
+- Standard Web Notification API used in `useNotifications.ts` (`Notification.requestPermission`, `new Notification(...)`).
+- File save uses `showDirectoryPicker` (File System Access API) in `useStorage.ts`; export uses Blob + anchor download.
+- Service worker (`public/sw.js`) is minimal: handles `SHOW_NOTIFICATION` messages and `notificationclick`; no offline caching.
+- Settings are persisted to IndexedDB and `localStorage` only. No Capacitor Preferences.
+- No `manifest.json` for PWA.
+- No Permission Manager screen.
+- No Capacitor packages installed.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `public/sw.js` — service worker that listens for `SHOW_NOTIFICATION` messages and calls `self.registration.showNotification()` with vibrate/tag/sound options
-- `src/hooks/useNotifications.ts` — hook managing notification permission state, SW registration, test countdown, and helper to fire a notification via the SW
-- `src/components/NotificationBell.tsx` — bell icon with three visual states: grey (default), red-slash (denied), glowing green (granted+verified)
-- Notification section in Settings: "Enable Timer Notifications" button, "Test Notification" button (5-second countdown then fires notification), permission modal for wrapper/manual instructions
+- `manifest.json` in `public/` — full PWA manifest (name, icons, theme color, display: standalone).
+- Workbox-powered service worker in `public/sw.js` — cache-first strategy for all JS/CSS/HTML/images; runtime caching for API calls; `self.registration.showNotification` for background notifications.
+- New view `PermissionManager.tsx` — startup modal/screen that calls `requestPermissions()` for Notifications and Storage on first open; persists status via Capacitor Preferences (falls back to localStorage on web).
+- `useCapacitorPreferences.ts` hook — wraps Capacitor `Preferences` API with graceful web fallback to `localStorage`.
+- `useCapacitorNotifications.ts` hook — wraps `@capacitor/local-notifications` with web-SW fallback.
+- `useCapacitorStorage.ts` hook — replaces `showSaveFilePicker` with Capacitor Filesystem write + Blob download fallback.
+- Capacitor packages to `package.json`: `@capacitor/core`, `@capacitor/local-notifications`, `@capacitor/filesystem`, `@capacitor/preferences`.
+- `<link rel="manifest">` and theme-color meta tags added to `index.html`.
+- Navigation item `"permissions"` visible in Settings area (or as modal on startup).
 
 ### Modify
-- `App.tsx` — import and register SW on mount, import `useNotifications` hook, pass notification helpers to Settings, show `NotificationBell` in header next to `SyncStatusIcon`
-- `Settings.tsx` — accept `notifications` prop from `useNotifications`, render the new Notifications card
+- `public/sw.js` — replace minimal SW with Workbox precache + runtime cache strategies + notification handler.
+- `useNotifications.ts` — delegate to `useCapacitorNotifications` for permission request and `LocalNotifications.schedule()`; keep SW fallback.
+- `useStorage.ts` — replace `showDirectoryPicker` / `FileSystemAccessAPI` with Capacitor Filesystem + Android Blob-download approach; use `useCapacitorPreferences` for master folder path persistence.
+- `Settings.tsx` — add link/button to open Permission Manager; update storage section to explain Android download approach.
+- `App.tsx` — show Permission Manager screen on first launch (when permissions not yet granted); add `"permissions"` to nav or modal trigger.
+- `index.html` — add PWA meta tags and manifest link.
 
 ### Remove
-- Nothing
+- Direct calls to `window.showDirectoryPicker` (non-Android compatible).
+- Direct `new Notification(...)` calls (replace with Capacitor local-notifications + SW).
 
 ## Implementation Plan
-1. Create `src/frontend/public/sw.js` — registers a `message` event listener; on `{type:'SHOW_NOTIFICATION'}` fires `showNotification` with title, body, vibrate:[200,100,200], tag:'timer-done'
-2. Create `src/frontend/src/hooks/useNotifications.ts` — tracks `permission` state (default/granted/denied), `verified` boolean, `testCountdown` number; exposes `requestPermission()`, `testNotification()`, `fireNotification(title, body)`, handles SW registration with `navigator.serviceWorker.register('/sw.js')`
-3. Create `src/frontend/src/components/NotificationBell.tsx` — renders Bell icon from lucide-react in grey/red-with-BellOff/green-glowing based on permission+verified
-4. Update `Settings.tsx` — add Notifications card with "Enable Timer Notifications" button, "Test Notification" button with live countdown display, and permission-denied modal with manual instructions
-5. Update `App.tsx` — call `useNotifications`, pass to Settings, add `NotificationBell` in header
+1. Install Capacitor peer dependencies (`@capacitor/core`, `@capacitor/local-notifications`, `@capacitor/filesystem`, `@capacitor/preferences`) in `package.json`.
+2. Create `useCapacitorPreferences.ts` — thin wrapper around Capacitor Preferences with localStorage fallback.
+3. Create `useCapacitorNotifications.ts` — wraps LocalNotifications; falls back to SW postMessage on web.
+4. Create `useCapacitorStorage.ts` — Filesystem.writeFile for native, Blob anchor download for web/Android PWA.
+5. Rewrite `public/sw.js` with Workbox-style cache-first for static assets, SW notification handler.
+6. Add `public/manifest.json`.
+7. Create `PermissionManager.tsx` view — requests both Notifications + Storage permissions, stores result in Preferences.
+8. Update `useNotifications.ts` to use `useCapacitorNotifications`.
+9. Update `useStorage.ts` to use `useCapacitorStorage` and Preferences for folder path.
+10. Update `Settings.tsx` — update UI copy for Android download approach; add Permission Manager link.
+11. Update `App.tsx` — integrate PermissionManager startup modal.
+12. Update `index.html` — PWA meta tags + manifest link.

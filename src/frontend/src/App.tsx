@@ -3,16 +3,19 @@ import {
   BookOpen,
   Dumbbell,
   Settings as SettingsIcon,
+  Shield,
   Sparkles,
   Zap,
 } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NotificationBell } from "./components/NotificationBell";
 import { SyncStatusIcon } from "./components/SyncStatusIcon";
+import { prefGet } from "./hooks/useCapacitorPreferences";
 import { useNotifications } from "./hooks/useNotifications";
 import { useStorage } from "./hooks/useStorage";
 import { MyQuestions } from "./views/MyQuestions";
+import { PermissionManager } from "./views/PermissionManager";
 import { Settings } from "./views/Settings";
 import { SmartPaste } from "./views/SmartPaste";
 import { SprintMode } from "./views/SprintMode";
@@ -54,8 +57,18 @@ const NAV_ITEMS: {
 export default function App() {
   const [view, setView] = useState<View>("paste");
   const [questionsRefresh, setQuestionsRefresh] = useState(0);
+  const [showPermissionManager, setShowPermissionManager] = useState(false);
   const storage = useStorage();
   const notifications = useNotifications();
+
+  // Check if permission manager has been shown before
+  useEffect(() => {
+    prefGet("permissionsChecked").then((val) => {
+      if (val !== "true") {
+        setShowPermissionManager(true);
+      }
+    });
+  }, []);
 
   const handleSaved = () => {
     setQuestionsRefresh((k) => k + 1);
@@ -68,6 +81,11 @@ export default function App() {
       style={{ background: "var(--obsidian)" }}
     >
       <Toaster position="top-right" theme="dark" />
+
+      {/* Permission Manager overlay — shown on first launch */}
+      {showPermissionManager && (
+        <PermissionManager onDismiss={() => setShowPermissionManager(false)} />
+      )}
 
       {/* Sidebar — desktop only */}
       <aside
@@ -211,6 +229,45 @@ export default function App() {
               )}
             </button>
           ))}
+
+          {/* Permissions shortcut */}
+          <button
+            type="button"
+            data-ocid="nav.permissions.link"
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "10px 12px",
+              borderRadius: "12px",
+              border: "1px solid transparent",
+              background: "transparent",
+              color: "rgba(154,167,178,0.8)",
+              cursor: "pointer",
+              textAlign: "left",
+              marginBottom: "4px",
+              transition: "all 0.2s",
+              marginTop: "8px",
+            }}
+            onClick={() => setShowPermissionManager(true)}
+          >
+            <Shield size={18} />
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: "13px", fontWeight: 600, lineHeight: 1.2 }}>
+                Permissions
+              </p>
+              <p
+                style={{
+                  fontSize: "10px",
+                  color: "rgba(154,167,178,0.5)",
+                  marginTop: "1px",
+                }}
+              >
+                Manage access
+              </p>
+            </div>
+          </button>
         </nav>
 
         <div
@@ -281,8 +338,30 @@ export default function App() {
             </h2>
           </div>
 
-          {/* Right: notification bell + sync icon */}
+          {/* Right: permissions shortcut + notification bell + sync icon */}
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-ocid="header.permissions.button"
+              title="Permission Manager"
+              aria-label="Permission Manager"
+              onClick={() => setShowPermissionManager(true)}
+              style={{
+                width: "32px",
+                height: "32px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "transparent",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                color: "rgba(154,167,178,0.5)",
+                padding: 0,
+              }}
+            >
+              <Shield size={16} />
+            </button>
             <NotificationBell
               permission={notifications.permission}
               verified={notifications.verified}
@@ -308,7 +387,11 @@ export default function App() {
           {view === "questions" && <MyQuestions key={questionsRefresh} />}
           {view === "sprint" && <SprintMode />}
           {view === "settings" && (
-            <Settings storage={storage} notifications={notifications} />
+            <Settings
+              storage={storage}
+              notifications={notifications}
+              onOpenPermissions={() => setShowPermissionManager(true)}
+            />
           )}
         </main>
       </div>
@@ -359,6 +442,40 @@ export default function App() {
             </button>
           );
         })}
+        {/* Permissions shortcut in mobile nav */}
+        <button
+          type="button"
+          data-ocid="mobile-nav.permissions.link"
+          className="touch-target"
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "3px",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: "rgba(154,167,178,0.5)",
+            transition: "color 0.2s",
+            padding: "8px 4px",
+          }}
+          onClick={() => setShowPermissionManager(true)}
+        >
+          <Shield size={18} />
+          <span
+            style={{
+              fontSize: "9px",
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              lineHeight: 1,
+            }}
+          >
+            Perms
+          </span>
+        </button>
       </nav>
     </div>
   );

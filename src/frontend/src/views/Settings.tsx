@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Loader2,
   RefreshCw,
+  Shield,
   Upload,
 } from "lucide-react";
 import type React from "react";
@@ -20,11 +21,13 @@ import type { useStorage } from "../hooks/useStorage";
 interface SettingsProps {
   storage: ReturnType<typeof useStorage>;
   notifications: ReturnType<typeof useNotifications>;
+  onOpenPermissions?: () => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
   storage,
   notifications,
+  onOpenPermissions,
 }) => {
   const { actor } = useActor();
   const [stats, setStats] = useState<{
@@ -53,10 +56,10 @@ export const Settings: React.FC<SettingsProps> = ({
       const ok = await storage.linkFolder();
       if (ok) {
         toast.success(
-          "Folder linked! Data will auto-sync to variant-data.json",
+          "Storage enabled! Clicking Save will download variant-data.json.",
         );
       } else {
-        toast.error("Could not link folder. Try Chrome or Edge.");
+        toast.error("Could not enable storage. Please try again.");
       }
     } finally {
       setLinkingFolder(false);
@@ -101,7 +104,7 @@ export const Settings: React.FC<SettingsProps> = ({
       setStats(newStats);
       toast.success("Data imported successfully!");
     } catch (e) {
-      toast.error("Import failed — invalid file format?");
+      toast.error("Import failed \u2014 invalid file format?");
       console.error(e);
     } finally {
       setImporting(false);
@@ -113,7 +116,7 @@ export const Settings: React.FC<SettingsProps> = ({
       case "synced":
         return {
           color: "#22c55e",
-          label: "Synced to folder",
+          label: "Downloads folder — ready to save",
           bg: "rgba(34,197,94,0.1)",
         };
       case "browser-only":
@@ -125,7 +128,7 @@ export const Settings: React.FC<SettingsProps> = ({
       case "error":
         return {
           color: "#ef4444",
-          label: "Error — permission required",
+          label: "Error — check permissions",
           bg: "rgba(239,68,68,0.1)",
         };
       default:
@@ -147,7 +150,7 @@ export const Settings: React.FC<SettingsProps> = ({
           color: notifications.verified ? "#22c55e" : "#f59e0b",
           label: notifications.verified
             ? "Active & Verified"
-            : "Enabled — not yet tested",
+            : "Enabled \u2014 not yet tested",
           bg: notifications.verified
             ? "rgba(34,197,94,0.1)"
             : "rgba(245,158,11,0.1)",
@@ -179,11 +182,27 @@ export const Settings: React.FC<SettingsProps> = ({
   return (
     <div className="animate-fade-in space-y-6 max-w-2xl">
       {/* Header */}
-      <div>
-        <p className="section-title">Settings</p>
-        <h2 className="text-2xl font-bold text-white mt-1">
-          Data &amp; <span className="neon-text">Export</span>
-        </h2>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="section-title">Settings</p>
+          <h2 className="text-2xl font-bold text-white mt-1">
+            Data &amp; <span className="neon-text">Export</span>
+          </h2>
+        </div>
+
+        {/* Permissions shortcut button */}
+        {onOpenPermissions && (
+          <button
+            type="button"
+            data-ocid="settings.permissions.button"
+            className="outline-btn flex items-center gap-2"
+            style={{ minHeight: "40px", fontSize: "13px" }}
+            onClick={onOpenPermissions}
+          >
+            <Shield size={14} />
+            Permissions
+          </button>
+        )}
       </div>
 
       {/* === Timer Notifications === */}
@@ -334,7 +353,7 @@ export const Settings: React.FC<SettingsProps> = ({
           )}
         </div>
 
-        {/* Linked folder status */}
+        {/* Linked storage status */}
         {storage.isLinked && (
           <div
             className="flex items-center gap-2 p-3 rounded-xl"
@@ -345,13 +364,14 @@ export const Settings: React.FC<SettingsProps> = ({
           >
             <CheckCircle size={15} style={{ color: "#22c55e" }} />
             <span className="text-sm" style={{ color: "#22c55e" }}>
-              Linked: <strong>variant-data.json</strong>
+              Enabled: saves download to <strong>Downloads / Documents</strong>
             </span>
           </div>
         )}
 
         <p className="text-sm text-slate-400">
-          Link a local folder on your device. The app will auto-save a{" "}
+          On Android, clicking <strong className="text-white">Save</strong>{" "}
+          downloads a{" "}
           <code
             style={{
               background: "rgba(32,230,230,0.1)",
@@ -363,7 +383,9 @@ export const Settings: React.FC<SettingsProps> = ({
           >
             variant-data.json
           </code>{" "}
-          file there every 2 seconds after changes.
+          to your <strong className="text-white">Downloads</strong> or{" "}
+          <strong className="text-white">Documents</strong> folder. No folder
+          picker needed.
         </p>
 
         <button
@@ -381,12 +403,11 @@ export const Settings: React.FC<SettingsProps> = ({
           ) : (
             <FolderOpen size={14} />
           )}
-          {storage.isLinked ? "Re-link Folder" : "Link to Local Folder"}
+          {storage.isLinked ? "Re-enable Storage" : "Enable File Saving"}
         </button>
 
         <p className="text-xs text-slate-600">
-          Requires Chrome or Edge (File System Access API). Data is also
-          auto-saved to browser IndexedDB regardless.
+          Data is also auto-saved to browser IndexedDB on every change.
         </p>
       </div>
 

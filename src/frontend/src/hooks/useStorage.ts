@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { prefGet, prefSet } from "./useCapacitorPreferences";
+import { useCapacitorStorage } from "./useCapacitorStorage";
 
 export type SyncStatus = "idle" | "synced" | "browser-only" | "error";
 
@@ -46,13 +48,13 @@ export interface StoragePayload {
 }
 
 export function useStorage() {
+  const capStorage = useCapacitorStorage();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [isLinked, setIsLinked] = useState(false);
   const dbRef = useRef<IDBDatabase | null>(null);
-  const dirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Initialize IndexedDB on mount
+  // Initialize IndexedDB and restore persisted storage link state
   useEffect(() => {
     openDB()
       .then((db) => {
@@ -61,27 +63,24 @@ export function useStorage() {
       .catch((e) => {
         console.warn("[useStorage] Failed to open IndexedDB:", e);
       });
+
+    // Restore linked state from Capacitor Preferences
+    prefGet("storageLinked").then((val) => {
+      if (val === "true") {
+        setIsLinked(true);
+        setSyncStatus("synced");
+      }
+    });
   }, []);
 
-  // Write to local file in linked folder
+  // Write to file using Capacitor Filesystem (or Blob download on web)
   const writeToFile = useCallback(
     async (payload: StoragePayload): Promise<boolean> => {
-      if (!dirHandleRef.current) return false;
-      try {
-        const fileHandle = await dirHandleRef.current.getFileHandle(
-          "variant-data.json",
-          { create: true },
-        );
-        const writable = await fileHandle.createWritable();
-        await writable.write(JSON.stringify(payload, null, 2));
-        await writable.close();
-        return true;
-      } catch (e) {
-        console.warn("[useStorage] File write failed:", e);
-        return false;
-      }
+      if (!isLinked) return false;
+      const jsonString = JSON.stringify(payload, null, 2);
+      return capStorage.saveFileNative("variant-data.json", jsonString);
     },
-    [],
+    [isLinked, capStorage],
   );
 
   // Core save — debounced 2s
@@ -111,8 +110,8 @@ export function useStorage() {
           }
         }
 
-        // Layer 2: File System
-        if (dirHandleRef.current) {
+        // Layer 2: Capacitor Filesystem (native) or Blob download (web)
+        if (isLinked) {
           const ok = await writeToFile(payload);
           setSyncStatus(ok ? "synced" : "error");
         } else {
@@ -120,7 +119,7 @@ export function useStorage() {
         }
       }, 2000);
     },
-    [writeToFile],
+    [writeToFile, isLinked],
   );
 
   // Load from IndexedDB on mount
@@ -145,31 +144,23 @@ export function useStorage() {
     }
   }, []);
 
-  // Link a local folder via File System Access API
+  // Link storage — no longer uses directory picker.
+  // On native: marks as linked and persists to Preferences.
+  // On web/Android PWA: same approach, saves will use Blob download.
   const linkFolder = useCallback(async (): Promise<boolean> => {
-    if (!("showDirectoryPicker" in window)) {
-      console.warn("[useStorage] File System Access API not supported.");
-      setSyncStatus("error");
-      return false;
-    }
     try {
-      const handle = await (window as any).showDirectoryPicker({
-        mode: "readwrite",
-      });
-      dirHandleRef.current = handle;
+      await prefSet("storageLinked", "true");
       setIsLinked(true);
       setSyncStatus("synced");
       return true;
-    } catch (e: any) {
-      if (e?.name !== "AbortError") {
-        console.warn("[useStorage] Directory picker error:", e);
-        setSyncStatus("error");
-      }
+    } catch (e) {
+      console.warn("[useStorage] linkFolder failed:", e);
+      setSyncStatus("error");
       return false;
     }
   }, []);
 
-  // Export backup as JSON download
+  // Export backup as JSON Blob download (primary save mechanism on Android)
   const exportBackup = useCallback(async (data: any[]): Promise<void> => {
     const payload: StoragePayload = {
       questions: data,
@@ -181,7 +172,9 @@ export function useStorage() {
     const a = document.createElement("a");
     a.href = url;
     a.download = `variant-backup-${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, []);
 
