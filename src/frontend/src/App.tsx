@@ -8,7 +8,9 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
+import { NotificationBell } from "./components/NotificationBell";
 import { SyncStatusIcon } from "./components/SyncStatusIcon";
+import { useNotifications } from "./hooks/useNotifications";
 import { useStorage } from "./hooks/useStorage";
 import { MyQuestions } from "./views/MyQuestions";
 import { Settings } from "./views/Settings";
@@ -53,6 +55,7 @@ export default function App() {
   const [view, setView] = useState<View>("paste");
   const [questionsRefresh, setQuestionsRefresh] = useState(0);
   const storage = useStorage();
+  const notifications = useNotifications();
 
   const handleSaved = () => {
     setQuestionsRefresh((k) => k + 1);
@@ -278,11 +281,18 @@ export default function App() {
             </h2>
           </div>
 
-          {/* Right: sync icon */}
-          <SyncStatusIcon
-            status={storage.syncStatus}
-            isLinked={storage.isLinked}
-          />
+          {/* Right: notification bell + sync icon */}
+          <div className="flex items-center gap-2">
+            <NotificationBell
+              permission={notifications.permission}
+              verified={notifications.verified}
+              onClick={() => setView("settings")}
+            />
+            <SyncStatusIcon
+              status={storage.syncStatus}
+              isLinked={storage.isLinked}
+            />
+          </div>
         </header>
 
         <main
@@ -297,7 +307,9 @@ export default function App() {
           {view === "paste" && <SmartPaste onSaved={handleSaved} />}
           {view === "questions" && <MyQuestions key={questionsRefresh} />}
           {view === "sprint" && <SprintMode />}
-          {view === "settings" && <Settings storage={storage} />}
+          {view === "settings" && (
+            <Settings storage={storage} notifications={notifications} />
+          )}
         </main>
       </div>
 

@@ -1,5 +1,7 @@
 import {
   BarChart3,
+  Bell,
+  BellOff,
   CheckCircle,
   Download,
   FileJson,
@@ -12,13 +14,18 @@ import type React from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useActor } from "../hooks/useActor";
+import type { useNotifications } from "../hooks/useNotifications";
 import type { useStorage } from "../hooks/useStorage";
 
 interface SettingsProps {
   storage: ReturnType<typeof useStorage>;
+  notifications: ReturnType<typeof useNotifications>;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ storage }) => {
+export const Settings: React.FC<SettingsProps> = ({
+  storage,
+  notifications,
+}) => {
   const { actor } = useActor();
   const [stats, setStats] = useState<{
     totalQuestions: bigint;
@@ -61,7 +68,6 @@ export const Settings: React.FC<SettingsProps> = ({ storage }) => {
     setExporting(true);
     try {
       const jsonText = await actor.exportData();
-      // Also save via storage hook (exports a timestamped backup)
       let parsed: any[] = [];
       try {
         parsed = JSON.parse(jsonText);
@@ -87,7 +93,6 @@ export const Settings: React.FC<SettingsProps> = ({ storage }) => {
         setImporting(false);
         return;
       }
-      // Import raw JSON to backend
       const jsonText = JSON.stringify(
         Array.isArray(backup) ? backup : (backup.questions ?? []),
       );
@@ -134,6 +139,43 @@ export const Settings: React.FC<SettingsProps> = ({ storage }) => {
 
   const dot = syncDotColor();
 
+  // Notification permission display helpers
+  const permissionInfo = () => {
+    switch (notifications.permission) {
+      case "granted":
+        return {
+          color: notifications.verified ? "#22c55e" : "#f59e0b",
+          label: notifications.verified
+            ? "Active & Verified"
+            : "Enabled — not yet tested",
+          bg: notifications.verified
+            ? "rgba(34,197,94,0.1)"
+            : "rgba(245,158,11,0.1)",
+        };
+      case "denied":
+        return {
+          color: "#ef4444",
+          label: "Blocked by system",
+          bg: "rgba(239,68,68,0.1)",
+        };
+      default:
+        return {
+          color: "rgba(154,167,178,0.5)",
+          label: "Not requested",
+          bg: "rgba(154,167,178,0.05)",
+        };
+    }
+  };
+
+  const notifInfo = permissionInfo();
+
+  const testButtonLabel = () => {
+    if (notifications.testCountdown !== null) {
+      return `Testing... ${notifications.testCountdown}s`;
+    }
+    return "Send Test (5s)";
+  };
+
   return (
     <div className="animate-fade-in space-y-6 max-w-2xl">
       {/* Header */}
@@ -142,6 +184,115 @@ export const Settings: React.FC<SettingsProps> = ({ storage }) => {
         <h2 className="text-2xl font-bold text-white mt-1">
           Data &amp; <span className="neon-text">Export</span>
         </h2>
+      </div>
+
+      {/* === Timer Notifications === */}
+      <div className="glass-card p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <Bell size={16} style={{ color: "var(--cyan)" }} />
+          <p className="section-title">Timer Notifications</p>
+        </div>
+
+        {/* Permission status row */}
+        <div
+          className="flex items-center gap-3 p-3 rounded-xl"
+          style={{
+            background: notifInfo.bg,
+            border: `1px solid ${notifInfo.color}30`,
+          }}
+          data-ocid="notifications.status.card"
+        >
+          <span
+            style={{
+              width: "10px",
+              height: "10px",
+              borderRadius: "50%",
+              background: notifInfo.color,
+              boxShadow: `0 0 8px ${notifInfo.color}`,
+              flexShrink: 0,
+              display: "inline-block",
+            }}
+          />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-white">
+              Notification Permission
+            </p>
+            <p className="text-xs" style={{ color: notifInfo.color }}>
+              {notifInfo.label}
+            </p>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-3 flex-wrap">
+          <button
+            type="button"
+            data-ocid="notifications.enable.button"
+            className="cyan-btn flex items-center gap-2"
+            style={{ minHeight: "48px" }}
+            onClick={() => notifications.requestPermission()}
+          >
+            <Bell size={14} />
+            Enable Timer Notifications
+          </button>
+
+          <button
+            type="button"
+            data-ocid="notifications.test.button"
+            className="outline-btn flex items-center gap-2"
+            style={{ minHeight: "48px" }}
+            onClick={() => notifications.testNotification()}
+            disabled={notifications.testCountdown !== null}
+          >
+            {notifications.testCountdown !== null ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Bell size={14} />
+            )}
+            {testButtonLabel()}
+          </button>
+        </div>
+
+        <p className="text-xs text-slate-500">
+          A test notification will appear in 5 seconds to verify your setup
+          works.
+        </p>
+
+        {/* Denied modal — inline */}
+        {notifications.showDeniedModal && (
+          <div
+            data-ocid="notifications.denied.modal"
+            className="rounded-xl p-4 space-y-3"
+            style={{
+              background: "rgba(239,68,68,0.08)",
+              border: "1px solid rgba(239,68,68,0.3)",
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <BellOff size={16} style={{ color: "#ef4444" }} />
+              <p className="text-sm font-bold" style={{ color: "#ef4444" }}>
+                Notifications Blocked
+              </p>
+            </div>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              To see the timer while the app is closed, you must manually enable
+              notifications in your{" "}
+              <strong style={{ color: "#fca5a5" }}>
+                Phone Settings &gt; Apps &gt; Naksha &gt; Notifications
+              </strong>
+              .
+            </p>
+            <button
+              type="button"
+              data-ocid="notifications.denied_modal.close_button"
+              className="outline-btn"
+              style={{ borderColor: "rgba(239,68,68,0.5)", color: "#ef4444" }}
+              onClick={() => notifications.setShowDeniedModal(false)}
+            >
+              Got it
+            </button>
+          </div>
+        )}
       </div>
 
       {/* === Persistent Storage === */}
