@@ -5,17 +5,21 @@ import {
   CheckCircle,
   Download,
   FileJson,
+  Folder,
   FolderOpen,
   Loader2,
   RefreshCw,
   Shield,
   Upload,
+  WifiOff,
+  X,
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useActor } from "../hooks/useActor";
 import type { useNotifications } from "../hooks/useNotifications";
+import { useOfflineDirectory } from "../hooks/useOfflineDirectory";
 import type { useStorage } from "../hooks/useStorage";
 
 interface SettingsProps {
@@ -30,6 +34,7 @@ export const Settings: React.FC<SettingsProps> = ({
   onOpenPermissions,
 }) => {
   const { actor } = useActor();
+  const offlineDir = useOfflineDirectory();
   const [stats, setStats] = useState<{
     totalQuestions: bigint;
     totalVariants: bigint;
@@ -38,6 +43,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [linkingFolder, setLinkingFolder] = useState(false);
+  const [pickingDir, setPickingDir] = useState(false);
 
   useEffect(() => {
     if (!actor) return;
@@ -63,6 +69,20 @@ export const Settings: React.FC<SettingsProps> = ({
       }
     } finally {
       setLinkingFolder(false);
+    }
+  };
+
+  const handlePickOfflineDir = async () => {
+    setPickingDir(true);
+    try {
+      const ok = await offlineDir.pickDirectory();
+      if (ok) {
+        toast.success(`Offline directory set: ${offlineDir.dirName}`);
+      } else {
+        toast.info("No folder selected.");
+      }
+    } finally {
+      setPickingDir(false);
     }
   };
 
@@ -116,7 +136,7 @@ export const Settings: React.FC<SettingsProps> = ({
       case "synced":
         return {
           color: "#22c55e",
-          label: "Downloads folder — ready to save",
+          label: "Downloads folder \u2014 ready to save",
           bg: "rgba(34,197,94,0.1)",
         };
       case "browser-only":
@@ -128,7 +148,7 @@ export const Settings: React.FC<SettingsProps> = ({
       case "error":
         return {
           color: "#ef4444",
-          label: "Error — check permissions",
+          label: "Error \u2014 check permissions",
           bg: "rgba(239,68,68,0.1)",
         };
       default:
@@ -142,7 +162,6 @@ export const Settings: React.FC<SettingsProps> = ({
 
   const dot = syncDotColor();
 
-  // Notification permission display helpers
   const permissionInfo = () => {
     switch (notifications.permission) {
       case "granted":
@@ -190,7 +209,6 @@ export const Settings: React.FC<SettingsProps> = ({
           </h2>
         </div>
 
-        {/* Permissions shortcut button */}
         {onOpenPermissions && (
           <button
             type="button"
@@ -205,6 +223,118 @@ export const Settings: React.FC<SettingsProps> = ({
         )}
       </div>
 
+      {/* === Offline Directory (File System Access API) === */}
+      <div className="glass-card p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <WifiOff size={16} style={{ color: "var(--cyan)" }} />
+          <p className="section-title">Offline Directory</p>
+          {!offlineDir.isSupported && (
+            <span
+              className="text-xs px-2 py-0.5 rounded-full"
+              style={{
+                background: "rgba(245,158,11,0.12)",
+                color: "#f59e0b",
+              }}
+            >
+              Not supported
+            </span>
+          )}
+        </div>
+
+        {/* Status row */}
+        <div
+          className="flex items-center gap-3 p-3 rounded-xl"
+          style={{
+            background: offlineDir.isConnected
+              ? "rgba(34,197,94,0.08)"
+              : "rgba(154,167,178,0.05)",
+            border: `1px solid ${
+              offlineDir.isConnected
+                ? "rgba(34,197,94,0.3)"
+                : "rgba(154,167,178,0.12)"
+            }`,
+          }}
+          data-ocid="settings.offline_dir.card"
+        >
+          {offlineDir.isConnected ? (
+            <FolderOpen size={18} style={{ color: "#22c55e", flexShrink: 0 }} />
+          ) : (
+            <Folder
+              size={18}
+              style={{ color: "rgba(154,167,178,0.4)", flexShrink: 0 }}
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">
+              {offlineDir.dirName ?? "No folder selected"}
+            </p>
+            <p
+              className="text-xs"
+              style={{
+                color: offlineDir.isConnected
+                  ? "#22c55e"
+                  : "rgba(154,167,178,0.5)",
+              }}
+            >
+              {offlineDir.isConnected ? "Connected \u2713" : "Not connected"}
+            </p>
+          </div>
+          {offlineDir.isConnected && (
+            <button
+              type="button"
+              data-ocid="settings.offline_dir.close_button"
+              onClick={async () => {
+                await offlineDir.disconnect();
+                toast.info("Offline directory disconnected.");
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "rgba(154,167,178,0.5)",
+                padding: "4px",
+                borderRadius: "6px",
+                display: "flex",
+              }}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {offlineDir.isSupported ? (
+          <button
+            type="button"
+            data-ocid="settings.set_offline_dir.button"
+            className="cyan-btn flex items-center gap-2"
+            style={{ minHeight: "48px" }}
+            onClick={handlePickOfflineDir}
+            disabled={pickingDir}
+          >
+            {pickingDir ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : offlineDir.isConnected ? (
+              <RefreshCw size={14} />
+            ) : (
+              <FolderOpen size={14} />
+            )}
+            {offlineDir.isConnected
+              ? "Change Offline Directory"
+              : "Set Offline Directory"}
+          </button>
+        ) : (
+          <p className="text-xs text-slate-500">
+            File System Access API is not available in this browser. Use Chrome
+            or Edge on desktop for offline directory support.
+          </p>
+        )}
+
+        <p className="text-xs text-slate-600">
+          Pick a local folder on your device. Variant will remember it between
+          sessions and write backups directly to this directory.
+        </p>
+      </div>
+
       {/* === Timer Notifications === */}
       <div className="glass-card p-5 space-y-4">
         <div className="flex items-center gap-2">
@@ -212,7 +342,6 @@ export const Settings: React.FC<SettingsProps> = ({
           <p className="section-title">Timer Notifications</p>
         </div>
 
-        {/* Permission status row */}
         <div
           className="flex items-center gap-3 p-3 rounded-xl"
           style={{
@@ -242,7 +371,6 @@ export const Settings: React.FC<SettingsProps> = ({
           </div>
         </div>
 
-        {/* Action buttons */}
         <div className="flex gap-3 flex-wrap">
           <button
             type="button"
@@ -277,7 +405,6 @@ export const Settings: React.FC<SettingsProps> = ({
           works.
         </p>
 
-        {/* Denied modal — inline */}
         {notifications.showDeniedModal && (
           <div
             data-ocid="notifications.denied.modal"
@@ -321,7 +448,6 @@ export const Settings: React.FC<SettingsProps> = ({
           <p className="section-title">Persistent Storage</p>
         </div>
 
-        {/* Sync status row */}
         <div
           className="flex items-center gap-3 p-3 rounded-xl"
           style={{ background: dot.bg, border: `1px solid ${dot.color}30` }}
@@ -353,7 +479,6 @@ export const Settings: React.FC<SettingsProps> = ({
           )}
         </div>
 
-        {/* Linked storage status */}
         {storage.isLinked && (
           <div
             className="flex items-center gap-2 p-3 rounded-xl"
@@ -384,8 +509,7 @@ export const Settings: React.FC<SettingsProps> = ({
             variant-data.json
           </code>{" "}
           to your <strong className="text-white">Downloads</strong> or{" "}
-          <strong className="text-white">Documents</strong> folder. No folder
-          picker needed.
+          <strong className="text-white">Documents</strong> folder.
         </p>
 
         <button

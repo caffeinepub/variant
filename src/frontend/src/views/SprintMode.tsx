@@ -2,20 +2,28 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Copy,
   Dumbbell,
   Eye,
+  Folder,
+  FolderOpen,
   Loader2,
   Play,
   Trophy,
   XCircle,
   Zap,
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { MasterQuestion } from "../backend";
+import {
+  type FullScreenCard,
+  FullScreenQuizView,
+} from "../components/FullScreenQuizView";
 import { useActor } from "../hooks/useActor";
 import { generateVariantQuestion } from "../utils/variantGenerator";
 
@@ -377,6 +385,347 @@ const ReportCard: React.FC<ReportCardProps> = ({
   );
 };
 
+// ── Nested Folder Hierarchy ──────────────────────────────────────────────────
+interface TopicGroup {
+  topic: string;
+  chapters: ChapterGroup[];
+  totalCount: number;
+}
+
+interface ChapterGroup {
+  chapter: string;
+  questions: MasterQuestion[];
+}
+
+function buildHierarchy(questions: MasterQuestion[]): TopicGroup[] {
+  const topicMap = new Map<string, Map<string, MasterQuestion[]>>();
+
+  for (const q of questions) {
+    const topic = q.topic || "General";
+    const chapter = q.chapter || "General";
+    if (!topicMap.has(topic)) topicMap.set(topic, new Map());
+    const chapterMap = topicMap.get(topic)!;
+    if (!chapterMap.has(chapter)) chapterMap.set(chapter, []);
+    chapterMap.get(chapter)!.push(q);
+  }
+
+  return Array.from(topicMap.entries()).map(([topic, chapterMap]) => ({
+    topic,
+    chapters: Array.from(chapterMap.entries()).map(([chapter, qs]) => ({
+      chapter,
+      questions: qs,
+    })),
+    totalCount: Array.from(chapterMap.values()).reduce(
+      (sum, qs) => sum + qs.length,
+      0,
+    ),
+  }));
+}
+
+function buildFullScreenCards(
+  questions: MasterQuestion[],
+  useDecimals: boolean,
+): FullScreenCard[] {
+  return questions.map((q) => {
+    const variant = generateVariantQuestion(q.text, useDecimals, false);
+    return {
+      questionText: q.text,
+      mcqOptions: variant.mcqOptions,
+      correctIndex: variant.correctIndex,
+      answer: variant.answer,
+      solutionSteps: q.solutionSteps,
+    };
+  });
+}
+
+interface FolderTreeProps {
+  hierarchy: TopicGroup[];
+  onOpenQuestion: (cards: FullScreenCard[], initialIndex: number) => void;
+}
+
+const FolderTree: React.FC<FolderTreeProps> = ({
+  hierarchy,
+  onOpenQuestion,
+}) => {
+  const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const toggleTopic = (topic: string) => {
+    setExpandedTopics((prev) => {
+      const next = new Set(prev);
+      if (next.has(topic)) next.delete(topic);
+      else next.add(topic);
+      return next;
+    });
+  };
+
+  const toggleChapter = (key: string) => {
+    setExpandedChapters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      {hierarchy.map((topicGroup, tIdx) => {
+        const isTopicOpen = expandedTopics.has(topicGroup.topic);
+        return (
+          <div
+            key={topicGroup.topic}
+            className="glass-card overflow-hidden"
+            data-ocid={`sprint.topic.item.${tIdx + 1}`}
+            style={{
+              border: isTopicOpen
+                ? "1px solid rgba(32,230,230,0.25)"
+                : "1px solid rgba(32,230,230,0.1)",
+              transition: "border-color 0.2s",
+            }}
+          >
+            {/* Topic row (Level 1) */}
+            <button
+              type="button"
+              data-ocid={`sprint.topic_${tIdx + 1}.toggle`}
+              className="w-full flex items-center gap-3 p-4"
+              style={{
+                background: isTopicOpen
+                  ? "rgba(32,230,230,0.06)"
+                  : "transparent",
+                cursor: "pointer",
+                border: "none",
+                transition: "background 0.2s",
+                minHeight: "56px",
+              }}
+              onClick={() => toggleTopic(topicGroup.topic)}
+            >
+              <span
+                style={{
+                  color: isTopicOpen ? "var(--cyan)" : "rgba(154,167,178,0.7)",
+                }}
+              >
+                {isTopicOpen ? <FolderOpen size={18} /> : <Folder size={18} />}
+              </span>
+              <span
+                className="flex-1 text-left"
+                style={{
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  color: isTopicOpen ? "var(--cyan)" : "#eaf2f7",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {topicGroup.topic}
+              </span>
+              <span
+                className="text-xs px-2 py-1 rounded-full"
+                style={{
+                  background: isTopicOpen
+                    ? "rgba(32,230,230,0.15)"
+                    : "rgba(154,167,178,0.1)",
+                  color: isTopicOpen ? "var(--cyan)" : "rgba(154,167,178,0.6)",
+                  fontWeight: 700,
+                }}
+              >
+                {topicGroup.totalCount}
+              </span>
+              <ChevronDown
+                size={16}
+                style={{
+                  color: isTopicOpen ? "var(--cyan)" : "rgba(154,167,178,0.4)",
+                  transform: isTopicOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 0.25s ease",
+                }}
+              />
+            </button>
+
+            {/* Topic expanded content */}
+            <AnimatePresence>
+              {isTopicOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: "easeOut" }}
+                  style={{ overflow: "hidden" }}
+                >
+                  <div
+                    style={{
+                      borderTop: "1px solid rgba(32,230,230,0.08)",
+                      paddingTop: "4px",
+                      paddingBottom: "4px",
+                    }}
+                  >
+                    {topicGroup.chapters.map((chapterGroup, cIdx) => {
+                      const chapterKey = `${topicGroup.topic}__${chapterGroup.chapter}`;
+                      const isChapterOpen = expandedChapters.has(chapterKey);
+                      return (
+                        <div
+                          key={chapterKey}
+                          data-ocid={`sprint.chapter.item.${cIdx + 1}`}
+                        >
+                          {/* Chapter row (Level 2) */}
+                          <button
+                            type="button"
+                            data-ocid={`sprint.chapter_${cIdx + 1}.toggle`}
+                            className="w-full flex items-center gap-3"
+                            style={{
+                              padding: "10px 16px 10px 32px",
+                              background: isChapterOpen
+                                ? "rgba(167,139,250,0.06)"
+                                : "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              transition: "background 0.2s",
+                              minHeight: "48px",
+                            }}
+                            onClick={() => toggleChapter(chapterKey)}
+                          >
+                            <ChevronRight
+                              size={13}
+                              style={{
+                                color: isChapterOpen
+                                  ? "#a78bfa"
+                                  : "rgba(154,167,178,0.4)",
+                                transform: isChapterOpen
+                                  ? "rotate(90deg)"
+                                  : "rotate(0deg)",
+                                transition: "transform 0.2s",
+                                flexShrink: 0,
+                              }}
+                            />
+                            <Folder
+                              size={14}
+                              style={{
+                                color: isChapterOpen
+                                  ? "#a78bfa"
+                                  : "rgba(154,167,178,0.5)",
+                                flexShrink: 0,
+                              }}
+                            />
+                            <span
+                              className="flex-1 text-left"
+                              style={{
+                                fontSize: "13px",
+                                fontWeight: isChapterOpen ? 700 : 500,
+                                color: isChapterOpen
+                                  ? "#a78bfa"
+                                  : "rgba(154,167,178,0.8)",
+                              }}
+                            >
+                              {chapterGroup.chapter}
+                            </span>
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full"
+                              style={{
+                                background: "rgba(167,139,250,0.12)",
+                                color: "rgba(167,139,250,0.8)",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {chapterGroup.questions.length}
+                            </span>
+                          </button>
+
+                          {/* Questions (Level 3) */}
+                          <AnimatePresence>
+                            {isChapterOpen && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{
+                                  duration: 0.2,
+                                  ease: "easeOut",
+                                }}
+                                style={{ overflow: "hidden" }}
+                              >
+                                <div
+                                  style={{
+                                    borderTop:
+                                      "1px solid rgba(167,139,250,0.08)",
+                                  }}
+                                >
+                                  {chapterGroup.questions.map((q, qIdx) => (
+                                    <button
+                                      type="button"
+                                      key={q.id.toString()}
+                                      data-ocid={`sprint.question.item.${qIdx + 1}`}
+                                      className="w-full flex items-center gap-3 text-left"
+                                      style={{
+                                        padding: "12px 16px 12px 52px",
+                                        background: "transparent",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        borderBottom:
+                                          qIdx <
+                                          chapterGroup.questions.length - 1
+                                            ? "1px solid rgba(255,255,255,0.04)"
+                                            : "none",
+                                        minHeight: "52px",
+                                        transition: "background 0.15s",
+                                      }}
+                                      onClick={() => {
+                                        const allCards = buildFullScreenCards(
+                                          chapterGroup.questions,
+                                          false,
+                                        );
+                                        onOpenQuestion(allCards, qIdx);
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        (
+                                          e.currentTarget as HTMLButtonElement
+                                        ).style.background =
+                                          "rgba(255,255,255,0.03)";
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        (
+                                          e.currentTarget as HTMLButtonElement
+                                        ).style.background = "transparent";
+                                      }}
+                                    >
+                                      <p
+                                        className="flex-1 text-slate-400 math-text"
+                                        style={{
+                                          fontSize: "12px",
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                          lineHeight: 1.4,
+                                        }}
+                                      >
+                                        {q.text}
+                                      </p>
+                                      <Play
+                                        size={14}
+                                        style={{
+                                          color: "rgba(32,230,230,0.5)",
+                                          flexShrink: 0,
+                                        }}
+                                      />
+                                    </button>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // ── Main SprintMode ──────────────────────────────────────────────────────────
 export const SprintMode: React.FC<SprintModeProps> = ({
   activeQuestion,
@@ -391,6 +740,11 @@ export const SprintMode: React.FC<SprintModeProps> = ({
   const [sessionAnswers, setSessionAnswers] = useState<boolean[]>([]);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // FullScreen quiz state
+  const [fsCards, setFsCards] = useState<FullScreenCard[]>([]);
+  const [fsInitialIndex, setFsInitialIndex] = useState(0);
+  const [fsOpen, setFsOpen] = useState(false);
 
   const loadQuestions = useCallback(async () => {
     if (!actor) return;
@@ -417,6 +771,12 @@ export const SprintMode: React.FC<SprintModeProps> = ({
       onClearActiveQuestion?.();
     }
   }, [activeQuestion, onClearActiveQuestion]);
+
+  const handleOpenFullScreen = (fCards: FullScreenCard[], idx: number) => {
+    setFsCards(fCards);
+    setFsInitialIndex(idx);
+    setFsOpen(true);
+  };
 
   const handleGenerateVariants = () => {
     if (!selectedQuestion) return;
@@ -458,7 +818,6 @@ export const SprintMode: React.FC<SprintModeProps> = ({
       updated[cardIndex] = correct;
       return updated;
     });
-    // Update report card
     setCards((prev) =>
       prev.map((c) => {
         if (c.type === "report") {
@@ -489,7 +848,6 @@ export const SprintMode: React.FC<SprintModeProps> = ({
     );
   }
 
-  // Empty state
   if (questions.length === 0) {
     return (
       <div className="animate-fade-in space-y-6">
@@ -513,236 +871,253 @@ export const SprintMode: React.FC<SprintModeProps> = ({
     );
   }
 
-  // Question picker
-  if (!selectedQuestion) {
+  const hierarchy = buildHierarchy(questions);
+
+  // Active sprint from SmartPaste navigation (selectedQuestion path)
+  if (selectedQuestion) {
+    const quizCardCount = cards.filter(
+      (c) => c.type === "original" || c.type === "variant",
+    ).length;
+    const answeredCount = sessionAnswers.filter((a) => a !== undefined).length;
+    const correctCount = sessionAnswers.filter(Boolean).length;
+
     return (
-      <div className="animate-fade-in space-y-6">
-        <div>
-          <p className="section-title">Sprint Mode</p>
-          <h2 className="text-2xl font-bold text-white mt-1">
-            Choose a <span className="neon-text">Question</span>
-          </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Pick a question to start your sprint
+      <div className="animate-fade-in space-y-5">
+        {/* Full-screen quiz overlay */}
+        {fsOpen && (
+          <FullScreenQuizView
+            cards={fsCards}
+            initialIndex={fsInitialIndex}
+            onClose={() => setFsOpen(false)}
+          />
+        )}
+
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            data-ocid="sprint.back.button"
+            className="outline-btn flex items-center gap-2"
+            style={{
+              minHeight: "40px",
+              padding: "8px 14px",
+              fontSize: "13px",
+            }}
+            onClick={() => {
+              setSelectedQuestion(null);
+              setCards([]);
+              setSessionAnswers([]);
+            }}
+          >
+            <ArrowLeft size={14} /> Back
+          </button>
+          <div>
+            <p className="section-title">Sprint Mode</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {quizCardCount > 0
+                ? `${answeredCount}/${quizCardCount} answered · ${correctCount} correct`
+                : "Ready to generate"}
+            </p>
+          </div>
+        </div>
+
+        {/* Selected question */}
+        <div
+          className="glass-card p-4"
+          style={{
+            background: "rgba(32,230,230,0.04)",
+            border: "1px solid rgba(32,230,230,0.18)",
+          }}
+        >
+          <p className="section-title mb-2">Question</p>
+          <p
+            className="math-text text-white text-sm leading-relaxed"
+            style={{ maxHeight: "128px", overflowY: "auto" }}
+          >
+            {selectedQuestion.text}
           </p>
         </div>
-        <div className="space-y-3">
-          {questions.map((q, idx) => (
-            <button
-              type="button"
-              key={q.id.toString()}
-              data-ocid={`sprint.picker.item.${idx + 1}`}
-              className="glass-card glass-card-hover p-4 w-full text-left space-y-2"
-              onClick={() => {
-                setSelectedQuestion(q);
-                setCards([]);
-                setSessionAnswers([]);
-              }}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <p
-                  className="math-text text-white text-sm font-medium leading-relaxed"
-                  style={{ maxHeight: "72px", overflowY: "auto", flex: 1 }}
-                >
-                  {q.text}
-                </p>
-                <Play
-                  size={18}
-                  style={{ color: "var(--cyan)", flexShrink: 0 }}
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="chip">{q.subject}</span>
-                <span className="chip">{q.chapter}</span>
-              </div>
-            </button>
-          ))}
+
+        {/* Fraction / Decimal toggle */}
+        <div
+          className="flex items-center gap-1 p-1 rounded-xl"
+          style={{
+            background: "rgba(16,24,32,0.7)",
+            border: "1px solid rgba(32,230,230,0.15)",
+            display: "inline-flex",
+          }}
+        >
+          <button
+            type="button"
+            data-ocid="sprint.fraction.toggle"
+            onClick={() => setUseDecimals(false)}
+            style={{
+              padding: "8px 18px",
+              borderRadius: "10px",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer",
+              border: "none",
+              background: !useDecimals ? "var(--cyan)" : "transparent",
+              color: !useDecimals ? "#070b10" : "rgba(154,167,178,0.7)",
+              transition: "all 0.2s",
+              boxShadow: !useDecimals
+                ? "0 0 12px rgba(32,230,230,0.4)"
+                : "none",
+            }}
+          >
+            Fraction
+          </button>
+          <button
+            type="button"
+            data-ocid="sprint.decimal.toggle"
+            onClick={() => setUseDecimals(true)}
+            style={{
+              padding: "8px 18px",
+              borderRadius: "10px",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer",
+              border: "none",
+              background: useDecimals ? "var(--cyan)" : "transparent",
+              color: useDecimals ? "#070b10" : "rgba(154,167,178,0.7)",
+              transition: "all 0.2s",
+              boxShadow: useDecimals ? "0 0 12px rgba(32,230,230,0.4)" : "none",
+            }}
+          >
+            Decimal
+          </button>
         </div>
+
+        {/* Generate button */}
+        <button
+          type="button"
+          data-ocid="sprint.generate.button"
+          className="cyan-btn flex items-center gap-2"
+          style={{ minHeight: "48px" }}
+          onClick={handleGenerateVariants}
+          disabled={generating}
+        >
+          {generating ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Zap size={14} />
+          )}
+          {generating ? "Generating..." : "Generate Variants"}
+        </button>
+
+        {/* Horizontal card scroll */}
+        {cards.length > 0 && (
+          <div
+            data-ocid="sprint.cards.list"
+            style={{
+              display: "flex",
+              overflowX: "auto",
+              gap: "16px",
+              paddingBottom: "16px",
+              paddingTop: "4px",
+              scrollSnapType: "x mandatory",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
+            {cards.map((card, i) => {
+              if (card.type === "original") {
+                const q = card.question;
+                const origVariant = generateVariantQuestion(
+                  q.text,
+                  useDecimals,
+                  false,
+                );
+                return (
+                  <QuizCard
+                    key="card-original"
+                    cardIndex={i}
+                    questionText={q.text}
+                    mcqOptions={origVariant.mcqOptions}
+                    correctIndex={origVariant.correctIndex}
+                    answer={origVariant.answer}
+                    solutionSteps={q.solutionSteps}
+                    onAnswer={(correct) => handleAnswer(i, correct)}
+                  />
+                );
+              }
+              if (card.type === "variant") {
+                return (
+                  <QuizCard
+                    key={`variant-${card.index}-${i}`}
+                    cardIndex={i}
+                    questionText={card.variant.variantText}
+                    mcqOptions={card.variant.mcqOptions}
+                    correctIndex={card.variant.correctIndex}
+                    answer={card.variant.answer}
+                    solutionSteps={card.question.solutionSteps}
+                    onAnswer={(correct) => handleAnswer(i, correct)}
+                  />
+                );
+              }
+              if (card.type === "report") {
+                return (
+                  <ReportCard
+                    key="card-report"
+                    correct={correctCount}
+                    total={quizCardCount}
+                    questionText={selectedQuestion.text}
+                  />
+                );
+              }
+              return null;
+            })}
+          </div>
+        )}
       </div>
     );
   }
 
-  // Active sprint
-  const quizCardCount = cards.filter(
-    (c) => c.type === "original" || c.type === "variant",
-  ).length;
-  const answeredCount = sessionAnswers.filter((a) => a !== undefined).length;
-  const correctCount = sessionAnswers.filter(Boolean).length;
-
+  // Default: Nested folder hierarchy view
   return (
-    <div className="animate-fade-in space-y-5">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          data-ocid="sprint.back.button"
-          className="outline-btn flex items-center gap-2"
-          style={{ minHeight: "40px", padding: "8px 14px", fontSize: "13px" }}
-          onClick={() => {
-            setSelectedQuestion(null);
-            setCards([]);
-            setSessionAnswers([]);
-          }}
-        >
-          <ArrowLeft size={14} /> Back
-        </button>
-        <div>
-          <p className="section-title">Sprint Mode</p>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {quizCardCount > 0
-              ? `${answeredCount}/${quizCardCount} answered · ${correctCount} correct`
-              : "Ready to generate"}
-          </p>
-        </div>
-      </div>
+    <div className="animate-fade-in space-y-6">
+      {/* Full-screen quiz overlay */}
+      {fsOpen && (
+        <FullScreenQuizView
+          cards={fsCards}
+          initialIndex={fsInitialIndex}
+          onClose={() => setFsOpen(false)}
+        />
+      )}
 
-      {/* Selected question */}
-      <div
-        className="glass-card p-4"
-        style={{
-          background: "rgba(32,230,230,0.04)",
-          border: "1px solid rgba(32,230,230,0.18)",
-        }}
-      >
-        <p className="section-title mb-2">Question</p>
-        <p
-          className="math-text text-white text-sm leading-relaxed"
-          style={{ maxHeight: "128px", overflowY: "auto" }}
-        >
-          {selectedQuestion.text}
+      <div>
+        <p className="section-title">Sprint Mode</p>
+        <h2 className="text-2xl font-bold text-white mt-1">
+          Question <span className="neon-text">Library</span>
+        </h2>
+        <p className="text-sm text-slate-400 mt-1">
+          {questions.length} questions across {hierarchy.length} topics
         </p>
       </div>
 
-      {/* Fraction / Decimal toggle */}
+      {/* Legend */}
       <div
-        className="flex items-center gap-1 p-1 rounded-xl"
+        className="flex flex-wrap items-center gap-4 p-3 rounded-xl"
         style={{
-          background: "rgba(16,24,32,0.7)",
-          border: "1px solid rgba(32,230,230,0.15)",
-          display: "inline-flex",
+          background: "rgba(32,230,230,0.03)",
+          border: "1px solid rgba(32,230,230,0.08)",
         }}
       >
-        <button
-          type="button"
-          data-ocid="sprint.fraction.toggle"
-          onClick={() => setUseDecimals(false)}
-          style={{
-            padding: "8px 18px",
-            borderRadius: "10px",
-            fontSize: "13px",
-            fontWeight: 700,
-            cursor: "pointer",
-            border: "none",
-            background: !useDecimals ? "var(--cyan)" : "transparent",
-            color: !useDecimals ? "#070b10" : "rgba(154,167,178,0.7)",
-            transition: "all 0.2s",
-            boxShadow: !useDecimals ? "0 0 12px rgba(32,230,230,0.4)" : "none",
-          }}
-        >
-          Fraction
-        </button>
-        <button
-          type="button"
-          data-ocid="sprint.decimal.toggle"
-          onClick={() => setUseDecimals(true)}
-          style={{
-            padding: "8px 18px",
-            borderRadius: "10px",
-            fontSize: "13px",
-            fontWeight: 700,
-            cursor: "pointer",
-            border: "none",
-            background: useDecimals ? "var(--cyan)" : "transparent",
-            color: useDecimals ? "#070b10" : "rgba(154,167,178,0.7)",
-            transition: "all 0.2s",
-            boxShadow: useDecimals ? "0 0 12px rgba(32,230,230,0.4)" : "none",
-          }}
-        >
-          Decimal
-        </button>
+        <div className="flex items-center gap-2">
+          <FolderOpen size={13} style={{ color: "var(--cyan)" }} />
+          <span className="text-xs text-slate-400">Topic</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Folder size={12} style={{ color: "#a78bfa" }} />
+          <span className="text-xs text-slate-400">Chapter</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Play size={12} style={{ color: "rgba(32,230,230,0.5)" }} />
+          <span className="text-xs text-slate-400">Open in full-screen</span>
+        </div>
       </div>
 
-      {/* Generate button */}
-      <button
-        type="button"
-        data-ocid="sprint.generate.button"
-        className="cyan-btn flex items-center gap-2"
-        style={{ minHeight: "48px" }}
-        onClick={handleGenerateVariants}
-        disabled={generating}
-      >
-        {generating ? (
-          <Loader2 size={14} className="animate-spin" />
-        ) : (
-          <Zap size={14} />
-        )}
-        {generating ? "Generating..." : "Generate Variants"}
-      </button>
-
-      {/* Horizontal card scroll */}
-      {cards.length > 0 && (
-        <div
-          data-ocid="sprint.cards.list"
-          style={{
-            display: "flex",
-            overflowX: "auto",
-            gap: "16px",
-            paddingBottom: "16px",
-            paddingTop: "4px",
-            scrollSnapType: "x mandatory",
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
-          {cards.map((card, i) => {
-            if (card.type === "original") {
-              const q = card.question;
-              // Generate fake MCQ for original using existing question numbers
-              const origVariant = generateVariantQuestion(
-                q.text,
-                useDecimals,
-                false,
-              );
-              return (
-                <QuizCard
-                  key="card-original"
-                  cardIndex={i}
-                  questionText={q.text}
-                  mcqOptions={origVariant.mcqOptions}
-                  correctIndex={origVariant.correctIndex}
-                  answer={origVariant.answer}
-                  solutionSteps={q.solutionSteps}
-                  onAnswer={(correct) => handleAnswer(i, correct)}
-                />
-              );
-            }
-            if (card.type === "variant") {
-              return (
-                <QuizCard
-                  key={`variant-${card.index}-${i}`}
-                  cardIndex={i}
-                  questionText={card.variant.variantText}
-                  mcqOptions={card.variant.mcqOptions}
-                  correctIndex={card.variant.correctIndex}
-                  answer={card.variant.answer}
-                  solutionSteps={card.question.solutionSteps}
-                  onAnswer={(correct) => handleAnswer(i, correct)}
-                />
-              );
-            }
-            if (card.type === "report") {
-              return (
-                <ReportCard
-                  key="card-report"
-                  correct={correctCount}
-                  total={quizCardCount}
-                  questionText={selectedQuestion.text}
-                />
-              );
-            }
-            return null;
-          })}
-        </div>
-      )}
+      <FolderTree hierarchy={hierarchy} onOpenQuestion={handleOpenFullScreen} />
     </div>
   );
 };

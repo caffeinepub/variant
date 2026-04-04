@@ -1,5 +1,5 @@
 // Service worker: Workbox-style offline caching + timer notifications
-const CACHE_NAME = "variant-v4";
+const CACHE_NAME = "variant-v6";
 const STATIC_ASSETS = ["/", "/index.html"];
 
 // Install: cache static shell
@@ -65,24 +65,17 @@ self.addEventListener("fetch", (e) => {
   }
 });
 
-// Notifications (timer alerts via postMessage)
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SHOW_NOTIFICATION") {
-    const { title, body } = event.data;
-    event.waitUntil(
-      self.registration.showNotification(title || "Timer Done!", {
-        body: body || "Your timer has ended.",
-        icon: "/assets/generated/variant-logo-transparent.dim_200x200.png",
-        badge: "/assets/generated/variant-logo-transparent.dim_200x200.png",
-        vibrate: [200, 100, 200],
-        tag: "timer-done",
-        requireInteraction: false,
-      }),
-    );
+// Timer notification via postMessage
+self.addEventListener("message", (e) => {
+  if (e.data?.type === "SHOW_NOTIFICATION") {
+    const { title, body } = e.data;
+    self.registration.showNotification(title, {
+      body,
+      icon: "/assets/generated/variant-logo-transparent.dim_200x200.png",
+      badge: "/assets/generated/variant-logo-transparent.dim_200x200.png",
+      vibrate: [200, 100, 200],
+      tag: "timer-done",
+      requireInteraction: false,
+    });
   }
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  event.waitUntil(clients.openWindow("/"));
 });
