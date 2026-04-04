@@ -3,6 +3,7 @@ import {
   Bell,
   BellOff,
   CheckCircle,
+  Cloud,
   Download,
   FileJson,
   Folder,
@@ -17,7 +18,9 @@ import {
 import type React from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { LoginButton } from "../components/LoginButton";
 import { useActor } from "../hooks/useActor";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import type { useNotifications } from "../hooks/useNotifications";
 import { useOfflineDirectory } from "../hooks/useOfflineDirectory";
 import type { useStorage } from "../hooks/useStorage";
@@ -34,6 +37,7 @@ export const Settings: React.FC<SettingsProps> = ({
   onOpenPermissions,
 }) => {
   const { actor } = useActor();
+  const { identity } = useInternetIdentity();
   const offlineDir = useOfflineDirectory();
   const [stats, setStats] = useState<{
     totalQuestions: bigint;
@@ -44,6 +48,16 @@ export const Settings: React.FC<SettingsProps> = ({
   const [importing, setImporting] = useState(false);
   const [linkingFolder, setLinkingFolder] = useState(false);
   const [pickingDir, setPickingDir] = useState(false);
+  const [exportingToCloud, setExportingToCloud] = useState(false);
+  const [loadingFromCloud, setLoadingFromCloud] = useState(false);
+
+  const isAnonymous = !identity || identity.getPrincipal().isAnonymous();
+  const shortPrincipal = !isAnonymous
+    ? (() => {
+        const p = identity!.getPrincipal().toString();
+        return `${p.slice(0, 8)}...${p.slice(-4)}`;
+      })()
+    : "";
 
   useEffect(() => {
     if (!actor) return;
@@ -128,6 +142,41 @@ export const Settings: React.FC<SettingsProps> = ({
       console.error(e);
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleExportToCloud = async () => {
+    if (!actor) return;
+    setExportingToCloud(true);
+    try {
+      const s = await actor.getStats();
+      setStats(s);
+      toast.success(
+        `Your ${Number(s.totalQuestions)} questions are saved on ICP — always available when you log in!`,
+      );
+    } catch (e) {
+      toast.error("Could not reach ICP cloud");
+      console.error(e);
+    } finally {
+      setExportingToCloud(false);
+    }
+  };
+
+  const handleLoadFromCloud = async () => {
+    if (!actor) return;
+    setLoadingFromCloud(true);
+    try {
+      const questions = await actor.listAllMasterQuestions();
+      const newStats = await actor.getStats();
+      setStats(newStats);
+      toast.success(
+        `${questions.length} question${questions.length !== 1 ? "s" : ""} loaded from ICP cloud.`,
+      );
+    } catch (e) {
+      toast.error("Could not load from ICP cloud");
+      console.error(e);
+    } finally {
+      setLoadingFromCloud(false);
     }
   };
 
@@ -220,6 +269,107 @@ export const Settings: React.FC<SettingsProps> = ({
             <Shield size={14} />
             Permissions
           </button>
+        )}
+      </div>
+
+      {/* === ICP Cloud Sync === */}
+      <div
+        className="glass-card p-5 space-y-4"
+        data-ocid="settings.cloud_sync.card"
+      >
+        <div className="flex items-center gap-2">
+          <Cloud size={16} style={{ color: "var(--cyan)" }} />
+          <p className="section-title">ICP Cloud Sync</p>
+        </div>
+
+        <p className="text-sm text-slate-400">
+          Log in with Internet Identity to sync your questions to the ICP
+          blockchain — available on any device, never lost.
+        </p>
+
+        {/* Login status row */}
+        <div
+          className="flex items-center justify-between flex-wrap gap-3 p-3 rounded-xl"
+          style={{
+            background: isAnonymous
+              ? "rgba(154,167,178,0.05)"
+              : "rgba(32,230,230,0.08)",
+            border: `1px solid ${
+              isAnonymous ? "rgba(154,167,178,0.12)" : "rgba(32,230,230,0.25)"
+            }`,
+          }}
+          data-ocid="settings.cloud_sync.status.card"
+        >
+          <div className="flex items-center gap-3">
+            <span
+              style={{
+                width: "10px",
+                height: "10px",
+                borderRadius: "50%",
+                flexShrink: 0,
+                display: "inline-block",
+                background: isAnonymous ? "rgba(154,167,178,0.4)" : "#22c55e",
+                boxShadow: isAnonymous ? "none" : "0 0 8px #22c55e",
+              }}
+            />
+            <div>
+              <p className="text-sm font-semibold text-white">
+                {isAnonymous ? "Not logged in" : "Logged in"}
+              </p>
+              <p
+                className="text-xs"
+                style={{
+                  color: isAnonymous ? "rgba(154,167,178,0.5)" : "var(--cyan)",
+                }}
+              >
+                {isAnonymous ? "Data saved locally only" : shortPrincipal}
+              </p>
+            </div>
+          </div>
+          <LoginButton compact={false} />
+        </div>
+
+        {/* Only show export/download from cloud when logged in */}
+        {!isAnonymous && (
+          <div className="flex gap-3 flex-wrap">
+            <button
+              type="button"
+              data-ocid="settings.cloud_sync.export.button"
+              className="cyan-btn flex items-center gap-2"
+              style={{ minHeight: "48px" }}
+              onClick={handleExportToCloud}
+              disabled={exportingToCloud}
+            >
+              {exportingToCloud ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Upload size={14} />
+              )}
+              {exportingToCloud ? "Syncing..." : "Sync to Cloud"}
+            </button>
+            <button
+              type="button"
+              data-ocid="settings.cloud_sync.load.button"
+              className="outline-btn flex items-center gap-2"
+              style={{ minHeight: "48px" }}
+              onClick={handleLoadFromCloud}
+              disabled={loadingFromCloud}
+            >
+              {loadingFromCloud ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Download size={14} />
+              )}
+              {loadingFromCloud ? "Loading..." : "Load from Cloud"}
+            </button>
+          </div>
+        )}
+
+        {!isAnonymous && (
+          <p className="text-xs text-slate-600">
+            "Sync to Cloud" confirms your questions are saved on ICP. "Load from
+            Cloud" fetches your saved questions from ICP to this device.
+          </p>
         )}
       </div>
 

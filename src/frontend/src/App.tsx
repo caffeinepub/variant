@@ -7,7 +7,8 @@ import {
   Trophy,
 } from "lucide-react";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { LoginButton } from "./components/LoginButton";
 import { NotificationBell } from "./components/NotificationBell";
 import { SyncStatusIcon } from "./components/SyncStatusIcon";
 import { prefGet } from "./hooks/useCapacitorPreferences";
@@ -63,6 +64,7 @@ const NAV_ITEMS: {
 export default function App() {
   const [view, setView] = useState<View>("paste");
   const [showPermissionManager, setShowPermissionManager] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const storage = useStorage();
   const notifications = useNotifications();
 
@@ -74,12 +76,19 @@ export default function App() {
     });
   }, []);
 
+  const handleSetView = (newView: View) => {
+    setView(newView);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  };
+
   const handleSaved = () => {
-    setView("questions");
+    handleSetView("questions");
   };
 
   const handleSavedAndSprint = () => {
-    setView("sprint");
+    handleSetView("sprint");
   };
 
   return (
@@ -190,7 +199,7 @@ export default function App() {
                 marginBottom: "4px",
                 transition: "all 0.2s",
               }}
-              onClick={() => setView(item.id)}
+              onClick={() => handleSetView(item.id)}
             >
               <span
                 style={{
@@ -236,17 +245,22 @@ export default function App() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "8px",
           }}
         >
-          <SyncStatusIcon
-            status={storage.syncStatus}
-            isLinked={storage.isLinked}
-          />
-          <NotificationBell
-            permission={notifications.permission}
-            verified={notifications.verified}
-            onClick={() => setView("settings")}
-          />
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <SyncStatusIcon
+              status={storage.syncStatus}
+              isLinked={storage.isLinked}
+            />
+            <NotificationBell
+              permission={notifications.permission}
+              verified={notifications.verified}
+              onClick={() => handleSetView("settings")}
+            />
+          </div>
+          <LoginButton compact={false} />
         </div>
       </aside>
 
@@ -298,7 +312,7 @@ export default function App() {
               Variant
             </h1>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <SyncStatusIcon
               status={storage.syncStatus}
               isLinked={storage.isLinked}
@@ -306,13 +320,15 @@ export default function App() {
             <NotificationBell
               permission={notifications.permission}
               verified={notifications.verified}
-              onClick={() => setView("settings")}
+              onClick={() => handleSetView("settings")}
             />
+            <LoginButton compact={true} />
           </div>
         </header>
 
         {/* Scrollable view area */}
         <div
+          ref={scrollRef}
           style={{
             flex: 1,
             overflowY: "auto",
@@ -361,7 +377,7 @@ export default function App() {
               minHeight: "48px",
               justifyContent: "center",
             }}
-            onClick={() => setView(item.id)}
+            onClick={() => handleSetView(item.id)}
           >
             <span
               style={{

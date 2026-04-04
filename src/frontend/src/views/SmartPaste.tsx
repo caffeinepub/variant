@@ -3,6 +3,7 @@ import {
   ChevronUp,
   Hash,
   Loader2,
+  LogIn,
   Save,
   Scissors,
   Sparkles,
@@ -11,6 +12,7 @@ import type React from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useActor } from "../hooks/useActor";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   type ClassificationResult,
   classifyText,
@@ -93,9 +95,7 @@ function parseGeminiSolution(raw: string): string[] {
   return finalLines
     .slice(0, 15)
     .map((l, i) => {
-      const clean = l
-        .replace(/^(?:step\s*\d+[:.\.\-]?|\d+[.)\s]+)/i, "")
-        .trim();
+      const clean = l.replace(/^(?:step\s*\d+[:.\-]?|\d+[.)\s]+)/i, "").trim();
       return `Step ${i + 1}: ${clean}`;
     })
     .filter((s) => s.replace(/^Step \d+: /, "").length > 0);
@@ -127,17 +127,21 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({
   onSavedAndSprint,
 }) => {
   const { actor } = useActor();
+  const { identity, login, isLoggingIn } = useInternetIdentity();
   const [pasteText, setPasteText] = useState("");
   const [classification, setClassification] =
     useState<ClassificationResult | null>(null);
   const [showSteps, setShowSteps] = useState(false);
   const [saving, setSaving] = useState(false);
   const [parsed, setParsed] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   const [showSolutionPaste, setShowSolutionPaste] = useState(false);
   const [solutionRaw, setSolutionRaw] = useState("");
   const [cleanedSteps, setCleanedSteps] = useState<string[]>([]);
   const [showCleanedSteps, setShowCleanedSteps] = useState(false);
+
+  const isAnonymous = !identity || identity.getPrincipal().isAnonymous();
 
   const handleParse = () => {
     if (!pasteText.trim()) {
@@ -173,7 +177,16 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({
   };
 
   const handleSave = async () => {
-    if (!actor || !classification) return;
+    if (!classification) return;
+
+    // Auth gate: must be logged in to save to ICP
+    if (isAnonymous) {
+      toast.error("Please log in with Internet Identity to save your question");
+      setShowLoginPrompt(true);
+      return;
+    }
+
+    if (!actor) return;
     setSaving(true);
     try {
       const lines = pasteText.split("\n");
@@ -199,6 +212,7 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({
       setParsed(false);
       setShowSolutionPaste(false);
       setShowCleanedSteps(false);
+      setShowLoginPrompt(false);
       onSavedAndSprint?.();
       onSaved?.();
     } catch (e) {
@@ -262,6 +276,7 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({
                 setCleanedSteps([]);
                 setShowSolutionPaste(false);
                 setShowCleanedSteps(false);
+                setShowLoginPrompt(false);
               }}
             >
               Clear
@@ -500,20 +515,100 @@ export const SmartPaste: React.FC<SmartPasteProps> = ({
             </div>
           )}
 
+          {/* Login prompt — shown when trying to save while anonymous */}
+          {showLoginPrompt && (
+            <div
+              data-ocid="smartpaste.login_prompt.card"
+              className="animate-fade-in rounded-2xl p-5 space-y-4"
+              style={{
+                background: "rgba(32,230,230,0.06)",
+                border: "1.5px solid rgba(32,230,230,0.35)",
+                boxShadow: "0 0 24px rgba(32,230,230,0.1)",
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "10px",
+                    background: "rgba(32,230,230,0.15)",
+                    border: "1px solid rgba(32,230,230,0.3)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <LogIn size={16} style={{ color: "var(--cyan)" }} />
+                </div>
+                <div>
+                  <p
+                    className="text-sm font-bold"
+                    style={{ color: "var(--cyan)" }}
+                  >
+                    Login required to save
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    Your questions are saved securely on the ICP blockchain.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                data-ocid="smartpaste.login_prompt.button"
+                onClick={login}
+                disabled={isLoggingIn}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  padding: "12px 20px",
+                  borderRadius: "12px",
+                  background: "rgba(32,230,230,0.15)",
+                  border: "1.5px solid rgba(32,230,230,0.5)",
+                  color: "var(--cyan)",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  transition: "all 0.2s",
+                  boxShadow: "0 0 16px rgba(32,230,230,0.2)",
+                  minHeight: "48px",
+                  opacity: isLoggingIn ? 0.7 : 1,
+                }}
+              >
+                {isLoggingIn ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <LogIn size={16} />
+                )}
+                {isLoggingIn ? "Logging in..." : "Login with Internet Identity"}
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             data-ocid="smartpaste.save.button"
             className="cyan-btn flex items-center gap-2 w-full justify-center text-base py-3"
             style={{ minHeight: "52px" }}
             onClick={handleSave}
-            disabled={saving || !actor}
+            disabled={saving || (!actor && !isAnonymous)}
           >
             {saving ? (
               <Loader2 size={16} className="animate-spin" />
+            ) : isAnonymous ? (
+              <LogIn size={16} />
             ) : (
               <Save size={16} />
             )}
-            {saving ? "Saving..." : "Save & Open Sprint"}
+            {saving
+              ? "Saving..."
+              : isAnonymous
+                ? "Login to Save & Open Sprint"
+                : "Save & Open Sprint"}
           </button>
         </div>
       )}
